@@ -1,0 +1,353 @@
+{
+  "base": "http://127.0.0.1:18099",
+  "farm": {
+    "name": "farm-desktop",
+    "path": "/",
+    "ok": true,
+    "body": "solo route-farm",
+    "paused": false,
+    "nodes": 6,
+    "online": 4,
+    "npcs": 11,
+    "kinds": [
+      "dog",
+      "goose",
+      "probe",
+      "web"
+    ],
+    "solo": true,
+    "hudOpen": false,
+    "detail": false,
+    "cards": 0,
+    "canvases": 0,
+    "title": "探针鸡农场 · Mock",
+    "models": true,
+    "pfModels": 44,
+    "shot": "./shots/farm-desktop.png",
+    "problems": {
+      "console": [],
+      "exceptions": [],
+      "http": []
+    }
+  },
+  "farmDay": {
+    "name": "farm-day",
+    "path": "/",
+    "ok": true,
+    "body": "solo route-farm",
+    "paused": false,
+    "nodes": 6,
+    "online": 4,
+    "npcs": 11,
+    "kinds": [
+      "dog",
+      "goose",
+      "probe",
+      "web"
+    ],
+    "solo": true,
+    "hudOpen": false,
+    "detail": false,
+    "cards": 0,
+    "canvases": 0,
+    "title": "探针鸡农场 · Mock",
+    "models": true,
+    "pfModels": 44,
+    "shot": "./shots/farm-day.png",
+    "problems": {
+      "console": [],
+      "exceptions": [],
+      "http": []
+    }
+  },
+  "nodes": {
+    "name": "nodes-desktop",
+    "path": "/nodes",
+    "ok": true,
+    "body": "solo",
+    "paused": true,
+    "nodes": 6,
+    "online": 4,
+    "npcs": 11,
+    "kinds": [
+      "dog",
+      "goose",
+      "probe",
+      "web"
+    ],
+    "solo": true,
+    "hudOpen": true,
+    "detail": false,
+    "cards": 6,
+    "canvases": 0,
+    "title": "探针列表 · 探针鸡农场 · Mock",
+    "models": true,
+    "pfModels": 44,
+    "shot": "./shots/nodes-desktop.png",
+    "problems": {
+      "console": [],
+      "exceptions": [],
+      "http": []
+    }
+  },
+  "detail": {
+    "name": "detail-desktop",
+    "path": "/node/1",
+    "ok": true,
+    "body": "solo",
+    "paused": true,
+    "nodes": 6,
+    "online": 4,
+    "npcs": 11,
+    "kinds": [
+      "dog",
+      "goose",
+      "probe",
+      "web"
+    ],
+    "solo": true,
+    "hudOpen": true,
+    "detail": true,
+    "cards": 6,
+    "canvases": 6,
+    "title": "东京 · A1 · 探针鸡农场 · Mock",
+    "models": true,
+    "pfModels": 44,
+    "shot": "./shots/detail-desktop.png",
+    "problems": {
+      "console": [],
+      "exceptions": [],
+      "http": []
+    }
+  },
+  "mobile": {
+    "name": "farm-mobile",
+    "path": "/",
+    "ok": true,
+    "body": "solo route-farm",
+    "paused": false,
+    "nodes": 6,
+    "online": 4,
+    "npcs": 11,
+    "kinds": [
+      "dog",
+      "goose",
+      "probe",
+      "web"
+    ],
+    "solo": true,
+    "hudOpen": false,
+    "detail": false,
+    "cards": 0,
+    "canvases": 0,
+    "title": "探针鸡农场 · Mock",
+    "models": true,
+    "pfModels": 44,
+    "shot": "./shots/farm-mobile.png",
+    "problems": {
+      "console": [],
+      "exceptions": [],
+      "http": []
+    }
+  },
+  "privateSite": null,
+  "checks": [
+    {
+      "name": "farm-desktop",
+      "path": "/",
+      "ok": true,
+      "body": "solo route-farm",
+      "paused": false,
+      "nodes": 6,
+      "online": 4,
+      "npcs": 11,
+      "kinds": [
+        "dog",
+        "goose",
+        "probe",
+        "web"
+      ],
+      "solo": true,
+      "hudOpen": false,
+      "detail": false,
+      "cards": 0,
+      "canvases": 0,
+      "title": "探针鸡农场 · Mock",
+      "models": true,
+      "pfModels": 44,
+      "shot": "./shots/farm-desktop.png",
+      "problems": {
+        "console": [],
+        "exceptions": [],
+        "http": []
+      }
+    },
+    {
+      "name": "farm-day",
+      "path": "/",
+      "ok": true,
+      "body": "solo route-farm",
+      "paused": false,
+      "nodes": 6,
+      "online": 4,
+      "npcs": 11,
+      "kinds": [
+        "dog",
+        "goose",
+        "probe",
+        "web"
+      ],
+      "solo": true,
+      "hudOpen": false,
+      "detail": false,
+      "cards": 0,
+      "canvases": 0,
+      "title": "探针鸡农场 · Mock",
+      "models": true,
+      "pfModels": 44,
+      "shot": "./shots/farm-day.png",
+      "problems": {
+        "console": [],
+        "exceptions": [],
+        "http": []
+      }
+    },
+    {
+      "name": "nodes-desktop",
+      "path": "/nodes",
+      "ok": true,
+      "body": "solo",
+      "paused": true,
+      "nodes": 6,
+      "online": 4,
+      "npcs": 11,
+      "kinds": [
+        "dog",
+        "goose",
+        "probe",
+        "web"
+      ],
+      "solo": true,
+      "hudOpen": true,
+      "detail": false,
+      "cards": 6,
+      "canvases": 0,
+      "title": "探针列表 · 探针鸡农场 · Mock",
+      "models": true,
+      "pfModels": 44,
+      "shot": "./shots/nodes-desktop.png",
+      "problems": {
+        "console": [],
+        "exceptions": [],
+        "http": []
+      }
+    },
+    {
+      "name": "detail-desktop",
+      "path": "/node/1",
+      "ok": true,
+      "body": "solo",
+      "paused": true,
+      "nodes": 6,
+      "online": 4,
+      "npcs": 11,
+      "kinds": [
+        "dog",
+        "goose",
+        "probe",
+        "web"
+      ],
+      "solo": true,
+      "hudOpen": true,
+      "detail": true,
+      "cards": 6,
+      "canvases": 6,
+      "title": "东京 · A1 · 探针鸡农场 · Mock",
+      "models": true,
+      "pfModels": 44,
+      "shot": "./shots/detail-desktop.png",
+      "problems": {
+        "console": [],
+        "exceptions": [],
+        "http": []
+      }
+    },
+    {
+      "name": "farm-mobile",
+      "path": "/",
+      "ok": true,
+      "body": "solo route-farm",
+      "paused": false,
+      "nodes": 6,
+      "online": 4,
+      "npcs": 11,
+      "kinds": [
+        "dog",
+        "goose",
+        "probe",
+        "web"
+      ],
+      "solo": true,
+      "hudOpen": false,
+      "detail": false,
+      "cards": 0,
+      "canvases": 0,
+      "title": "探针鸡农场 · Mock",
+      "models": true,
+      "pfModels": 44,
+      "shot": "./shots/farm-mobile.png",
+      "problems": {
+        "console": [],
+        "exceptions": [],
+        "http": []
+      }
+    },
+    {
+      "name": "tab-toggle",
+      "diag0": {
+        "wrapped": true,
+        "path": "/"
+      },
+      "toNodes": {
+        "path": "/nodes",
+        "open": true,
+        "paused": true,
+        "seen": 1,
+        "code": "Tab"
+      },
+      "afterBack": {
+        "path": "/",
+        "open": false,
+        "paused": false,
+        "body": "solo route-farm"
+      },
+      "back": {
+        "path": "/nodes",
+        "open": true,
+        "paused": true,
+        "seen": 2
+      },
+      "shot": "./shots/tab-toggle.png",
+      "problems": {
+        "console": [],
+        "exceptions": [],
+        "http": []
+      }
+    },
+    {
+      "name": "detail-tab-back",
+      "afterTab": {
+        "path": "/nodes",
+        "detail": false,
+        "open": true
+      },
+      "shot": "./shots/detail-tab-back.png",
+      "problems": {
+        "console": [],
+        "exceptions": [],
+        "http": []
+      }
+    }
+  ],
+  "ok": true
+}

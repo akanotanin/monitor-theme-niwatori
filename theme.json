@@ -1,0 +1,98 @@
+{
+  "name": "niwatori",
+  "short": "niwatori",
+  "description": "把 Monitor 的实时监控数据做成一座可玩的 3D 小鸡农场。",
+  "version": "1.0.4",
+  "author": "akanotanin",
+  "url": "https://github.com/akanotanin/monitor-theme-niwatori",
+  "config": [
+    {
+      "type": "title",
+      "label": "玩法"
+    },
+    {
+      "type": "boolean",
+      "key": "showWeb",
+      "label": "网站鸡",
+      "default": true,
+      "help": "每个 ping 探测任务生成一只网站鸡（显示平均延迟 / 丢包）。关掉之后场上只有探针鸡，网站鸡相关的统计也一起收起。"
+    },
+    {
+      "type": "number",
+      "key": "geese",
+      "label": "大白鹅数量",
+      "default": 2,
+      "min": 0,
+      "max": 8,
+      "help": "场上巡场的大白鹅（0–8）。玩家走进它的领地就会被追着啄；打不过可以跑，疾跑甩得掉。"
+    },
+    {
+      "type": "number",
+      "key": "dogs",
+      "label": "看门狗数量",
+      "default": 1,
+      "min": 0,
+      "max": 3,
+      "help": "鸡舍门口的看门狗（0–3）。只咬暴躁鸡和大白鹅，不咬玩家，也打不倒。"
+    },
+    {
+      "type": "number",
+      "key": "hotCpu",
+      "label": "暴躁鸡 · CPU 阈值（%）",
+      "default": 55,
+      "min": 1,
+      "max": 100,
+      "help": "CPU 占用超过它的探针鸡会变暴躁：主动追着玩家啄。"
+    },
+    {
+      "type": "number",
+      "key": "hotMem",
+      "label": "暴躁鸡 · 内存阈值（%）",
+      "default": 85,
+      "min": 1,
+      "max": 100,
+      "help": "内存占用超过它的探针鸡也会变暴躁。"
+    },
+    {
+      "type": "number",
+      "key": "hotMax",
+      "label": "最多暴躁鸡（0 = 不限）",
+      "default": 0,
+      "min": 0,
+      "max": 64,
+      "help": "机群很大时，暴躁鸡再多也就那几只追着你跑；填个上限（按 CPU / 内存压力取前 N 只），0 表示不限。"
+    },
+    {
+      "type": "title",
+      "label": "画面与声音"
+    },
+    {
+      "type": "select",
+      "key": "sky",
+      "label": "光照",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "自动（按北京时间）"
+        },
+        {
+          "value": "day",
+          "label": "白天"
+        },
+        {
+          "value": "dusk",
+          "label": "黄昏"
+        }
+      ],
+      "help": "「自动」按北京时间 18:00–06:00 切黄昏，其余白天；访客按 L 键可以自己切。"
+    },
+    {
+      "type": "boolean",
+      "key": "sound",
+      "label": "音效",
+      "default": true,
+      "help": "啄击 / 扇翅 / 命中都是 WebAudio 现场合成的，不加载音频文件。浏览器要求第一次点击或按键之后才出声；访客按 M 可静音。"
+    }
+  ]
+}

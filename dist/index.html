@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!-- Monitor hub 把主题挂在站点根目录；SPA 深链（/node/123）刷新时地址栏不是根，
+     相对路径会按 /node/ 解析 → 样式、模块、接口全 404。一个 base 把相对地址钉回根目录。 -->
+<base href="/">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#7ec850">
+<title>Monitor</title>
+<meta name="description" content="极简探针（Monitor）主题：把实时监控数据做成一座可玩的 3D 小鸡农场。" />
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="stylesheet" href="./style.css">
+<link rel="stylesheet" href="./theme.css?v=1.0.4">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }</script>
+<script type="module" src="./js/theme-boot.js?v=1.0.4"></script>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- 首屏：3D 画布淡入前先显示这块（主模块里 showWorld 会把它收掉） -->
+<div id="boot"><span>🐔 正在布置农场…</span></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="topbar">
+    <div class="stat" title="Monitor 里在线的节点数">🐔 探针鸡 在线 <b id="online">–</b><i> / <span id="online-total">–</span></i> 鸡</div>
+    <div class="stat" title="ping 探测任务数：每个探测任务对应一只网站鸡">🌐 网站鸡 在线 <b id="web-online">–</b><i> / <span id="web-total">–</span></i> 鸡</div>
+    <div class="stat" title="CPU/内存超阈值、或者网络最差的探针鸡：都会主动攻击你">🔥 暴躁鸡 <b id="hot">–</b> 只</div>
+    <div class="stat dim" id="visitors" title="场上玩家">👤 访客 <b>1</b> 鸡</div>
+
+    <div id="tools">
+      <button id="btn-probes" type="button" title="探针列表（Tab）：这台站监控的所有服务器" aria-label="探针列表">🖥</button>
+    </div>
+  </div>
+
+  <div id="feed"></div>
+  <div id="banner"></div>
+
+  <!-- 右上啄倒榜：单机模式下换成自己的战绩（主题的 solo.js 负责喂数据） -->
+  <div id="board" class="collapsed" title="点击展开 / 收起">
+    <h3 id="board-title">🐔 啄倒榜</h3>
+    <div id="board-rows"></div>
+  </div>
+
+  <div id="me">
+    <div id="me-name">–</div>
+    <div id="hpbar"><div id="hpfill"></div></div>
+    <div id="score"></div>
+  </div>
+
+  <div id="hint"></div>
+
+  <div id="touch" class="hidden">
+    <div id="stick"><div id="stick-knob"></div></div>
+    <div id="tbtns">
+      <button id="t-peck">啄</button>
+      <button id="t-jump">跳</button>
+      <button id="t-run">跑</button>
+    </div>
+  </div>
+</div>
+
+<div id="errbar" class="hidden"></div>
+
+<!-- 探针列表 / 详情：既是悬浮层（Tab），也是 /nodes 与 /node/<id> 路由的页面主体（theme-shell.js 切 class）。 -->
+<div id="plist" class="hidden" role="dialog" aria-modal="true" aria-labelledby="plist-title">
+  <div class="sheet">
+    <header>
+      <button id="plist-back" class="hidden" type="button" title="返回列表" aria-label="返回列表">←</button>
+      <h3 id="plist-title">🖥 探针列表</h3>
+      <span id="plist-sum"></span>
+      <a id="plist-admin" href="/admin/" title="管理后台（仅授权网络可访问）">⚙ 后台</a>
+      <button id="plist-close" type="button" title="关闭（Tab / Esc）" aria-label="关闭">✕</button>
+    </header>
+    <div id="plist-body"></div>
+    <div id="plist-detail" class="hidden"></div>
+    <p class="note" id="plist-note">点任意一张卡片看这台机器的详情 · 数据每 6 秒刷新 · Tab 开关本面板</p>
+    <p class="note" id="theme-credit">Theme: <a href="https://github.com/akanotanin/monitor-theme-niwatori" target="_blank" rel="noopener">Niwatori</a> · for Monitor.</p>
+  </div>
+</div>
+
+<!-- 农场页脚：主题署名（Monitor 主题惯例「Theme: …」）；列表页也有一份。 -->
+<p id="theme-footer">Theme: <a href="https://github.com/akanotanin/monitor-theme-niwatori" target="_blank" rel="noopener">Niwatori</a> · for Monitor.</p>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "monitor-theme-niwatori",
+  "private": true,
+  "version": "1.0.4",
+  "type": "module",
+  "description": "Monitor theme: a playable 3D chicken farm built on cyber-probe",
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "package": "node scripts/package.mjs",
+    "mock": "node scripts/mock-hub.mjs --port 18099",
+    "verify": "node scripts/cdp-verify.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
