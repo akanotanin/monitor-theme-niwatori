@@ -155,10 +155,25 @@ async function start() {
   // 标签页标题：hub 的站名（Monitor 主题的惯例是「站名」而不是固定字）。
   document.title = siteName || 'Monitor';
 
+  // 主题文件在升级瞬间可能还没全部就位（或 CDN 缓存了短暂 404）：
+  // 动态 import 重试 3 次；theme-shell 失败不锁农场，避免「农场没启动」整页报错。
+  const V = '1.0.5';
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function load(path, tries = 3) {
+    let last;
+    for (let i = 0; i < tries; i++) {
+      try {
+        return await import(`${path}?v=${V}${i ? `&r=${i}` : ''}`);
+      } catch (e) {
+        last = e;
+        if (i < tries - 1) await sleep(450 * (i + 1));
+      }
+    }
+    throw last;
+  }
+
   try {
-    // ?v=… 让升级后拿到新代码（主题静态文件默认会被浏览器缓存）
-    await import('./main.js?v=1.0.4');
-    await import('./theme-shell.js?v=1.0.4');
+    await load('./main.js');
   } catch (e) {
     console.error(e);
     lockScreen({
@@ -166,6 +181,17 @@ async function start() {
       body: `浏览器没能加载 3D 场景（可能需要 WebGL）。${String((e && e.message) || e)}`,
       login: false,
     });
+    return;
+  }
+
+  try {
+    await load('./theme-shell.js');
+  } catch (e) {
+    // 农场、列表按钮本身还能用；只是地址栏同步/Tab 切页失效。
+    console.warn('[theme] theme-shell 加载失败，农场继续运行', e);
+    setTimeout(() => {
+      try { window.__probeTheme?.hud?.banner?.('列表加载失败，刷新页面重试', 6000); } catch { /* 忽略 */ }
+    }, 600);
   }
 }
 

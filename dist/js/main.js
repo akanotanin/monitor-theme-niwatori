@@ -6,7 +6,7 @@ import { Chicken } from './chicken.js';
 import { Npc } from './npc.js';
 import { Goose, GOOSE } from './goose.js';
 import { Dog, DOG } from './dog.js';
-import { Hud } from './hud.js?v=1.0.4';
+import { Hud } from './hud.js?v=1.0.5';
 import { Net } from './net.js';
 import { SoloFarm } from './solo.js';
 import { Feathers, Dust } from './feathers.js';

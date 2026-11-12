@@ -16,7 +16,7 @@
 
 需要 **Monitor hub 1.6.0+**。
 
-1. 从 [Releases](https://github.com/akanotanin/monitor-theme-niwatori/releases) 下载 `monitor-theme-niwatori-1.0.4.tar.gz`
+1. 从 [Releases](https://github.com/akanotanin/monitor-theme-niwatori/releases) 下载 `monitor-theme-niwatori-1.0.5.tar.gz`
 2. 后台 → 主题 → 上传 tar.gz
 3. 可选设置：网站鸡、大白鹅/看门狗数量、暴躁鸡阈值、光照、音效
 
