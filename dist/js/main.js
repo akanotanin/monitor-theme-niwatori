@@ -6,7 +6,7 @@ import { Chicken } from './chicken.js';
 import { Npc } from './npc.js';
 import { Goose, GOOSE } from './goose.js';
 import { Dog, DOG } from './dog.js';
-import { Hud } from './hud.js?v=1.0.5';
+import { Hud } from './hud.js?v=1.0.6';
 import { Net } from './net.js';
 import { SoloFarm } from './solo.js';
 import { Feathers, Dust } from './feathers.js';
@@ -165,31 +165,29 @@ let camBlockers = [];              // 相机遮挡盒：[minx,miny,minz,maxx,max
 // 太大的网格（地面、天空、合并后的树）跳过，那些由 boxObstacles 兜底；太矮的（围栏）两边都不算。
 function rebuildCamBlockers() {
   camBlockers = [];
+  // 必须在量包围盒前刷新世界矩阵：模型刚 add 进来时 matrixWorld 还是局部坐标，
+  // 量出来的盒子会落在原点附近，镜头扫不到 → 模型不淡出、反而被旧碰撞盒拉近。
+  scene.updateMatrixWorld(true);
   const bb = new THREE.Box3(), sz = new THREE.Vector3();
+  // 同一个模型的所有网格合成一个包围盒：鸡舍是一面墙一个 mesh，按单面墙去判定会漏掉
+  // 整栋房子的中心，最后只剩碰撞盒（root=null）把镜头拉近 —— 就是这个主题以前会“缩放”的原因。
+  const roots = new Map();
   scene.traverse((o) => {
     if (!o.isMesh || !o.geometry || !o.visible) return;
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
     o.geometry.boundingBox.getSize(sz);
-    // 只认"够高够宽"的：木桶/木箱/干草卷这类小件不进列表 —— 走过它们时镜头会被反复推拉，
-    // 而它们本身挡住镜头也不明显（相机在 2~4m 高）。地面/天空（超大网格）也跳过。
     if (sz.y < 1.7 || sz.x > 30 || sz.z > 30) return;
     if (Math.max(sz.x, sz.z) < 1.2) return;
-    bb.setFromObject(o);
-    // 记下"根节点"：低模的模型是 Group（鸡舍=一面墙一个 mesh），只淡一片墙很奇怪，
-    // 所以整组一起淡。根 = scene 的直接子节点。
     let root = o;
     while (root.parent && root.parent !== scene) root = root.parent;
-    camBlockers.push([bb.min.x, bb.min.y, bb.min.z, bb.max.x, bb.max.y, bb.max.z, root]);
+    if (root === scene) return;            // 合批网格/围栏没有可淡出的根：不拉镜头，也不淡整个场景
+    if (!roots.has(root)) roots.set(root, new THREE.Box3());
+    bb.setFromObject(o);
+    roots.get(root).union(bb);
   });
-  // 碰撞盒只补"没被任何模型盒覆盖"的部分：鸡舍/草料棚这些既有模型盒又有碰撞盒，
-  // 两份都留的话离得稍近的那份会抢到命中，`root=null` 就退化成"拉近镜头"——正是要避免的那种跳。
-  for (const o of world.boxObstacles) {
-    if (o.h < 1.2) continue;
-    const covered = camBlockers.some((b) => b[6]
-      && o.x > b[0] - 0.4 && o.x < b[3] + 0.4 && o.z > b[2] - 0.4 && o.z < b[5] + 0.4);
-    if (covered) continue;
-    const gy = groundHeight(o.x, o.z);
-    camBlockers.push([o.x - o.hx, gy - 0.2, o.z - o.hz, o.x + o.hx, gy + o.h, o.z + o.hz, null]);
+  for (const [root, box] of roots) {
+    if (box.max.y - box.min.y < 1.2) continue;
+    camBlockers.push([box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z, root]);
   }
 }
 
@@ -1074,23 +1072,18 @@ function tick(now) {
   const _dy0 = Math.sin(camPitch);
   const _dz0 = -Math.cos(camYaw) * Math.cos(camPitch);
   const _t = camSweep(camTarget.x, camTarget.y, camTarget.z, _dx0 * cd, _dy0 * cd, _dz0 * cd);
-  const _hitRoot = camHitRoot;
-  let _wantCd = cd;
-  let _fadeRoot = null;
-  if (_t < 1 && _t * cd < cd * 0.88) {          // 只是擦到边（12% 死区）就当没挡
-    if (_hitRoot) _fadeRoot = _hitRoot;          // 能单独淡出的模型 → 不动机位，只淡它
-    else _wantCd = Math.max(1.1, _t * cd - 0.3); // 合批网格/围栏 → 只能轻轻拉近
-  }
-  const _maxStep = dt * (_wantCd < camDistCur ? 4 : 3);
-  camDistCur += Math.max(-_maxStep, Math.min(_maxStep, _wantCd - camDistCur));
+  // 只做淡出，不改机位距离：碰到模型时模型变半透明，镜头完全不动。
+  // （以前的实现会在没有可淡出根时把机位拉近，玩家贴着鸡舍走就会突然被怼到墙里。）
+  const _fadeRoot = _t < 1 ? camHitRoot : null;
   if (_fadeRoot) fadeRoot(_fadeRoot, FADE_MIN);
   updateFades(dt, _fadeRoot);
   camPitchEff = camPitch;
+  camDistCur = cd;                    // 机位距离固定，不再因遮挡缩放
   const _pdx = _dx0; const _pdy = _dy0; const _pdz = _dz0;
   camera.position.set(
-    camTarget.x + _pdx * camDistCur,
-    camTarget.y + _pdy * camDistCur,
-    camTarget.z + _pdz * camDistCur,
+    camTarget.x + _pdx * cd,
+    camTarget.y + _pdy * cd,
+    camTarget.z + _pdz * cd,
   );
   if (camera.position.y < 0.35) camera.position.y = 0.35;
   camera.lookAt(camTarget);
