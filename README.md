@@ -8,8 +8,8 @@
 - 每个 ping 任务一只**网站鸡**：平均延迟、最好/最差节点、丢包
 - 农场是首页；`Tab` / 顶栏 🖥 / `/nodes` 打开 1000px 列表悬浮层，点卡片进 1160px 详情悬浮层，详情里 `Tab` 回列表
 - 单机玩法：大白鹅、看门狗、暴躁鸡、啄击/扇翅、啄倒榜；没有联机服
-- 服务器卡片：实时网速 + 今日流量同一排，下方是三网延迟/丢包；离线 / 无指标卡片沉底
-- 列表与详情的滚动条统一成悬浮窗同款细玻璃条
+- 服务器卡片：资源条下是一块网络信息（网速 + 今日流量、三网延迟/丢包），在线时长收进悬停提示
+- 离线 / 无数据卡片沉底；列表与详情的滚动条统一成悬浮窗同款细玻璃条
 - 曲线浮框跟随鼠标，靠近卡片边缘会自动翻转
 - 农场道具为精细低模（GLB，CC BY 4.0），随包分发、始终开启
 - 只读同源 Monitor 公开接口，没有第三方运行时请求
@@ -18,7 +18,7 @@
 
 需要 **Monitor hub 1.6.0+**。
 
-1. 从 [Releases](https://github.com/akanotanin/monitor-theme-niwatori/releases) 下载 `monitor-theme-niwatori-1.0.10.tar.gz`
+1. 从 [Releases](https://github.com/akanotanin/monitor-theme-niwatori/releases) 下载 `monitor-theme-niwatori-1.0.11.tar.gz`
 2. 后台 → 主题 → 上传 tar.gz
 3. 可选设置：网站鸡、大白鹅/看门狗数量、暴躁鸡阈值、光照、音效
 

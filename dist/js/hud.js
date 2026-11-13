@@ -807,10 +807,10 @@ function netCells(n, farm) {
     if (Number.isFinite(tid)) ids.add(tid);
   }
   if (live) for (const tid of live.keys()) ids.add(tid);
-  const all = [...ids].sort((a, b) => a - b);
-  if (!all.length) return [];
-  const named = all.filter((tid) => isNetTask(farm.probes[tid]));
-  const pick = [...named, ...all.filter((tid) => !named.includes(tid))].slice(0, 3);
+  if (!ids.size) return [];
+  // 固定成 电信 → 联通 → 移动 的顺序；其它任务排在后面补位。
+  const pick = [...ids].sort((a, b) =>
+    netRank(farm.probes[a]) - netRank(farm.probes[b]) || a - b).slice(0, 3);
   return pick.map((tid) => {
     const full = String(farm.probes[tid] || `#${tid}`);
     const v = freshPing(farm, n.id, tid);
@@ -831,15 +831,19 @@ function freshPing(farm, nodeId, tid) {
   if (!v) return null;
   return (typeof farm._age === 'function' ? farm._age(v.ts) : 0) <= CONF.maxPingAge ? v : null;
 }
-function isNetTask(name) {
-  return /电信|联通|移动|telecom|unicom|mobile/i.test(name || '');
-}
-function netLabel(name, tid) {
+function netKind(name) {
   const s = String(name || '');
   if (/电信|telecom/i.test(s)) return '电信';
   if (/联通|unicom/i.test(s)) return '联通';
   if (/移动|mobile/i.test(s)) return '移动';
-  return s.replace(/\s+/g, '').slice(0, 3) || `#${tid}`;
+  return '';
+}
+function netRank(name) {
+  const kind = netKind(name);
+  return kind === '电信' ? 0 : kind === '联通' ? 1 : kind === '移动' ? 2 : 3;
+}
+function netLabel(name, tid) {
+  return netKind(name) || String(name || '').replace(/\s+/g, '').slice(0, 3) || `#${tid}`;
 }
 function fmtLoss(l) {
   if (l == null || !isFinite(l)) return '—';
@@ -868,29 +872,31 @@ function probeCard(n, net, cells = []) {
   const rate = (v) => (live && v != null && isFinite(v) ? fmtRate(v) : '—');
   const bytes = (v) => (live && v != null && isFinite(v) ? fmtBytes(v) : '—');
   const up = live && m.uptime != null && isFinite(m.uptime) ? fmtUptime(m.uptime) : '—';
-  // 三网行已经有每条线的延迟时，底部再摆一个平均值就是重复；只在三网完全没数时兜底。
-  const hasNetLat = cells.some((c) => c.lat !== '—');
+  // 在线时长不再单独占一行（卡片更紧凑）；悬停整张卡片仍能看到。
+  const uptimeTitle = n.online && up !== '—' ? ` · 已运行 ${up}` : '';
 
   const bar = (label, pct) => `<span class="pbar"><span>${label}</span>`
     + `<span class="track"><i class="fill" style="width:${live ? pct.toFixed(0) : 0}%;background:${pctColor(pct)}"></i></span>`
     + `<em>${live ? `${Math.round(pct)}%` : '—'}</em></span>`;
 
   return `<button class="pcard${n.online ? '' : ' off'}" type="button" data-id="${Number(n.id)}" `
-    + `title="点开 ${escapeHtml(String(n.name || ''))} 的详情">`
+    + `title="点开 ${escapeHtml(String(n.name || ''))} 的详情${escapeHtml(uptimeTitle)}">`
     + `<span class="phead">${flag}<b class="pname">${escapeHtml(String(n.name || '未命名'))}</b>`
     + `<span class="pon">${escapeHtml(state)}</span></span>`
     + `<span class="psub">${escapeHtml(sys || '—')}</span>`
     + bar('CPU', Math.max(0, Math.min(100, Number(m.cpu) || 0)))
     + bar('内存', memP)
     + bar('磁盘', diskP)
-    // 网速和今日流量挤成一排：左边实时速率、右边累计流量（Komari 没有 day_rx/day_tx 时给「—」，不整格隐身）
+    // 网络信息收成一块：第一排网速 + 今日流量，第二排三网延迟/丢包（或没有三网任务时兜底平均延迟）
+    + `<span class="pnetbox">`
     + `<span class="pfoot pio"><span class="prate">↓ ${rate(m.net_rx)} ↑ ${rate(m.net_tx)}</span>`
     + `<span class="ptoday" title="今日累计流量">↓ ${bytes(n.day_rx)} ↑ ${bytes(n.day_tx)}</span></span>`
-    // 三网延迟/丢包独立一排；数据没到齐就先摆「—」，卡片高度不会跳
-    + (cells.length ? `<span class="pfoot pnet">${cells.map((c) =>
-      `<span class="net" title="${escapeHtml(c.title)}"><b>${escapeHtml(c.label)}</b><span>${c.lat}</span><em class="${c.cls}">${c.lossTxt}</em></span>`
-    ).join('')}</span>` : '')
-    + `<span class="pfoot"><span>在线 ${up}</span>${hasNetLat ? '' : `<span class="hi">${escapeHtml(lat)}</span>`}</span>`
+    + (cells.length
+      ? `<span class="pfoot pnet">${cells.map((c) =>
+        `<span class="net" title="${escapeHtml(c.title)}"><b>${escapeHtml(c.label)}</b><span>${c.lat}</span><em class="${c.cls}">${c.lossTxt}</em></span>`
+      ).join('')}</span>`
+      : (lat !== '—' ? `<span class="pfoot"><span>平均延迟</span><span class="hi">${escapeHtml(lat)}</span></span>` : ''))
+    + `</span>`
     + (n.public_remark ? `<span class="pre" title="${escapeHtml(String(n.public_remark))}">${escapeHtml(String(n.public_remark))}</span>` : '')
     + '</button>';
 }

@@ -290,11 +290,13 @@ body.touch #me{bottom:calc(154px + env(safe-area-inset-bottom))}
 .pfoot{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--sub);
   font-variant-numeric:tabular-nums}
 .pfoot .hi{color:var(--accent)}
-/* 网速 + 今日流量同一排；三网延迟/丢包再一排（比其它行小半号，三格才放得下） */
+/* 网络信息收成一块：网速 + 今日流量一排，三网延迟/丢包一排；顶部细线把它和资源条分开 */
+.pnetbox{display:flex;flex-direction:column;gap:5px;margin-top:1px;padding-top:7px;
+  border-top:1px solid rgba(207,232,176,.12)}
 .pfoot.pio{gap:6px;font-size:10.5px}
 .pfoot.pio>span{min-width:0;white-space:nowrap}
 .pfoot .ptoday{color:var(--sub)}
-.pfoot.pnet{gap:5px;font-size:10px;color:#cbb894}
+.pfoot.pnet{gap:6px;font-size:10.5px;color:#cbb894}
 .pfoot.pnet .net{display:inline-flex;align-items:baseline;gap:3px;min-width:0;white-space:nowrap}
 .pfoot.pnet .net b{font-weight:600;color:#d8c39a}
 .pfoot.pnet .net span{color:#e8f0da;font-variant-numeric:tabular-nums}

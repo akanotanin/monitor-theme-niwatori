@@ -1,7 +1,7 @@
 {
   "name": "monitor-theme-niwatori",
   "private": true,
-  "version": "1.0.10",
+  "version": "1.0.11",
   "type": "module",
   "description": "Monitor theme: a playable 3D chicken farm built on cyber-probe",
   "scripts": {
