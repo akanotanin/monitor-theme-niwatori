@@ -2,7 +2,7 @@
   "name": "niwatori",
   "short": "niwatori",
   "description": "把 Monitor 的实时监控数据做成一座可玩的 3D 小鸡农场。",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "author": "akanotanin",
   "url": "https://github.com/akanotanin/monitor-theme-niwatori",
   "config": [
