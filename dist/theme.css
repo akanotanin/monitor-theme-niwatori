@@ -31,11 +31,42 @@
 
 /* ---------- 详情悬浮层：比列表宽一点，内容自己滚 ---------- */
 #plist.is-detail .sheet { width: min(1160px, 94vw); max-height: min(92vh, 950px); }
-#plist-detail { scrollbar-width: thin; scrollbar-color: rgba(207,232,176,.3) transparent; }
-#plist-detail::-webkit-scrollbar { width: 8px; }
-#plist-detail::-webkit-scrollbar-track { background: transparent; }
-#plist-detail::-webkit-scrollbar-thumb { background: rgba(207,232,176,.26); border-radius: 999px; }
-#plist-detail::-webkit-scrollbar-thumb:hover { background: rgba(207,232,176,.42); }
+
+/* ---------- 悬浮层里的滚动条：不用系统那条白底滑轨 ----------
+   列表和详情共用一套：透明轨道 + 半透明草绿滑块，悬停转成强调黄，
+   边框内缩 2px 做出「浮在玻璃上」的细条感。
+   ★ Chromium 同时看到 scrollbar-width 时会退回原生细条（箭头还在）；
+   所以标准属性只放在 Firefox 的 @supports 里，Chromium 走 ::-webkit-scrollbar。 */
+#plist-body::-webkit-scrollbar, #plist-detail::-webkit-scrollbar { width: 10px; height: 10px; }
+#plist-body::-webkit-scrollbar-track, #plist-detail::-webkit-scrollbar-track { background: transparent; }
+#plist-body::-webkit-scrollbar-thumb, #plist-detail::-webkit-scrollbar-thumb {
+  background: rgba(207,232,176,.24); border-radius: 999px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+#plist-body::-webkit-scrollbar-thumb:hover, #plist-detail::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,215,102,.55); background-clip: padding-box;
+}
+#plist-body::-webkit-scrollbar-corner, #plist-detail::-webkit-scrollbar-corner { background: transparent; }
+#plist-body::-webkit-scrollbar-button, #plist-detail::-webkit-scrollbar-button { display: none; }
+
+/* 个别宿主（主题预览 iframe / 旧版 hub）会把外层页面滚起来；
+   根滚动条也收成同一套玻璃色，别再露出 Windows 的白轨和箭头。 */
+html::-webkit-scrollbar, body::-webkit-scrollbar { width: 12px; height: 12px; }
+html::-webkit-scrollbar-track, body::-webkit-scrollbar-track { background: rgba(10,16,6,.5); }
+html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb {
+  background: rgba(207,232,176,.26); border-radius: 999px;
+  border: 3px solid transparent; background-clip: padding-box;
+}
+html::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,215,102,.55); background-clip: padding-box;
+}
+html::-webkit-scrollbar-button, body::-webkit-scrollbar-button { display: none; }
+
+/* Firefox 不支持 ::-webkit-scrollbar：用标准属性给一份同色系的细条。 */
+@supports (-moz-appearance: none) {
+  #plist-body, #plist-detail { scrollbar-width: thin; scrollbar-color: rgba(207,232,176,.28) transparent; }
+  html, body { scrollbar-width: thin; scrollbar-color: rgba(207,232,176,.3) rgba(10,16,6,.5); }
+}
 @media (max-width: 700px) {
   #plist.is-detail .sheet { width: 100%; max-height: 92vh; }
 }

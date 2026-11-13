@@ -119,14 +119,22 @@ export class Hud {
   renderProbes(force = false) {
     if (!this.plist || !this.probesOpen) return;
     const f = this.farm;
-    // 顺序跟后台一致（hub 的 sort，其次 id）
-    const nodes = f.nodes.slice().sort((a, b) => (Number(a.sort) || 0) - (Number(b.sort) || 0) || a.id - b.id);
+    // 能正常显示数据的卡片排前面，离线 / 没有指标的卡片统一沉到最后：
+    // 组内仍按 hub 的 sort、其次 id，刷新时不会把同组卡片来回挪。
+    const rank = (n) => (n.online && n.metrics ? 0 : 1);
+    const nodes = f.nodes.slice().sort((a, b) =>
+      rank(a) - rank(b)
+      || (Number(a.sort) || 0) - (Number(b.sort) || 0)
+      || a.id - b.id);
     const netOf = (n) => f.netRowById(n.id);
+    const cellsOf = (n) => netCells(n, f);
     const sig = nodes.map((n) => {
-      const m = n.metrics || {}, r = netOf(n);
-      return [n.id, n.online ? 1 : 0, n.name, n.public_remark, n.country, n.os, n.virt,
+      const m = n.metrics || {}, r = netOf(n), cells = cellsOf(n);
+      return [n.id, Number(n.sort) || 0, n.online ? 1 : 0, n.metrics ? 1 : 0,
+        n.name, n.public_remark, n.country, n.os, n.virt,
         n.cpu_cores, n.cpu_name, n.mem_total, n.disk_total, m.cpu, m.mem_used, m.disk_used,
         m.net_rx, m.net_tx, m.uptime, n.day_rx, n.day_tx, r && r.avg != null ? Math.round(r.avg) : '',
+        cells.map((c) => `${c.label}:${c.lat}:${c.lossTxt}`).join('/'),
         Math.floor((seenAgo(n) ?? -1) / 60)].join(',');   // 离线时长/静态字段变了也要重画
     }).join('|');
     if (!force && sig === this._plistSig) return;
@@ -140,7 +148,7 @@ export class Hud {
 
     const keep = this.plistBody.scrollTop;      // 重建 innerHTML 会把滚动位置打回顶部，先存着
     this.plistBody.innerHTML = nodes.length
-      ? nodes.map((n) => probeCard(n, netOf(n))).join('')
+      ? nodes.map((n) => probeCard(n, netOf(n), cellsOf(n))).join('')
       : '<p class="note">监控后端里还没有节点</p>';
     this.plistBody.scrollTop = keep;
   }
@@ -785,9 +793,61 @@ function escapeHtml(s) {
 
 // ---------------- 探针列表的节点卡片 ----------------
 // 列的是「hub 里加进监控的每一台服务器」，字段全部来自 /api/nodes 的公开视图：
-// 名字/国旗/系统/虚拟化/核数 + CPU·内存·磁盘 + 实时网速 + 今日流量 + 延迟 + 在线时长 + 公开备注。
+// 名字/国旗/系统/虚拟化/核数 + CPU·内存·磁盘 + 实时网速 + 今日流量 + 三网延迟/丢包 + 延迟 + 在线时长 + 公开备注。
 // 主机名/IP/探测目标一律不在这里出现（和详情抽屉同一条隐私口径）。
-function probeCard(n, net) {
+
+/** 三网探测：优先挑名字里带电信/联通/移动的条目，不足三个再用其它任务补满。
+ *  每个条目只取该节点当前的新鲜样本；延迟和丢包并排显示，和卡片其它数值一样缺数据给「—」。 */
+function netCells(n, farm) {
+  const live = farm.ping.get(n.id);
+  const loss = farm.lossByNode.get(n.id) || {};
+  const ids = new Set();
+  for (const k of Object.keys(farm.probes)) {
+    const tid = Number(k);
+    if (Number.isFinite(tid)) ids.add(tid);
+  }
+  if (live) for (const tid of live.keys()) ids.add(tid);
+  const all = [...ids].sort((a, b) => a - b);
+  if (!all.length) return [];
+  const named = all.filter((tid) => isNetTask(farm.probes[tid]));
+  const pick = [...named, ...all.filter((tid) => !named.includes(tid))].slice(0, 3);
+  return pick.map((tid) => {
+    const full = String(farm.probes[tid] || `#${tid}`);
+    const v = freshPing(farm, n.id, tid);
+    const lat = v && v.latency != null && isFinite(v.latency) ? `${Math.round(v.latency)}ms` : '—';
+    const raw = loss[tid];
+    const hasLoss = raw != null && isFinite(raw);
+    const lossTxt = fmtLoss(hasLoss ? raw : null);
+    const cls = !hasLoss ? 'none' : (raw >= 5 ? 'bad' : (raw > 0 ? 'warn' : ''));
+    return {
+      label: netLabel(full, tid), lat, lossTxt, cls,
+      title: `${full} · 延迟 ${lat} · 丢包 ${lossTxt}`,
+    };
+  });
+}
+/** 只认新鲜样本：口径和 farm._aggregate 的 maxPingAge 一致（_age 会处理访客/hub 时钟差）。 */
+function freshPing(farm, nodeId, tid) {
+  const v = farm.ping.get(nodeId)?.get(tid);
+  if (!v) return null;
+  return (typeof farm._age === 'function' ? farm._age(v.ts) : 0) <= CONF.maxPingAge ? v : null;
+}
+function isNetTask(name) {
+  return /电信|联通|移动|telecom|unicom|mobile/i.test(name || '');
+}
+function netLabel(name, tid) {
+  const s = String(name || '');
+  if (/电信|telecom/i.test(s)) return '电信';
+  if (/联通|unicom/i.test(s)) return '联通';
+  if (/移动|mobile/i.test(s)) return '移动';
+  return s.replace(/\s+/g, '').slice(0, 3) || `#${tid}`;
+}
+function fmtLoss(l) {
+  if (l == null || !isFinite(l)) return '—';
+  if (l >= 10) return `${Math.round(l)}%`;
+  return `${Number.isInteger(l) ? l : l.toFixed(1)}%`;
+}
+
+function probeCard(n, net, cells = []) {
   const m = n.metrics || {};
   const live = n.online && !!n.metrics;          // 离线 / 还没上报过指标 → 数值栏一律给「—」，别显示成 0%
   const memTotal = Number(n.mem_total || m.mem_total) || 0;
@@ -821,10 +881,14 @@ function probeCard(n, net) {
     + bar('CPU', Math.max(0, Math.min(100, Number(m.cpu) || 0)))
     + bar('内存', memP)
     + bar('磁盘', diskP)
-    + `<span class="pfoot"><span>↓ ${rate(m.net_rx)}</span><span>↑ ${rate(m.net_tx)}</span></span>`
-    // Komari 没有「今日流量」字段（day_rx/day_tx 为 null）：这一格不摆两个「—」，只留右侧延迟
-    + `<span class="pfoot">${(n.day_rx != null || n.day_tx != null) ? `<span>今日 ↓${bytes(n.day_rx)} ↑${bytes(n.day_tx)}</span>` : '<span></span>'}<span class="hi">${escapeHtml(lat)}</span></span>`
-    + `<span class="pfoot"><span>在线 ${up}</span></span>`
+    // 网速和今日流量挤成一排：左边实时速率、右边累计流量（Komari 没有 day_rx/day_tx 时给「—」，不整格隐身）
+    + `<span class="pfoot pio"><span class="prate">↓ ${rate(m.net_rx)} ↑ ${rate(m.net_tx)}</span>`
+    + `<span class="ptoday" title="今日累计流量">↓ ${bytes(n.day_rx)} ↑ ${bytes(n.day_tx)}</span></span>`
+    // 三网延迟/丢包独立一排；数据没到齐就先摆「—」，卡片高度不会跳
+    + (cells.length ? `<span class="pfoot pnet">${cells.map((c) =>
+      `<span class="net" title="${escapeHtml(c.title)}"><b>${escapeHtml(c.label)}</b><span>${c.lat}</span><em class="${c.cls}">${c.lossTxt}</em></span>`
+    ).join('')}</span>` : '')
+    + `<span class="pfoot"><span>在线 ${up}</span><span class="hi">${escapeHtml(lat)}</span></span>`
     + (n.public_remark ? `<span class="pre" title="${escapeHtml(String(n.public_remark))}">${escapeHtml(String(n.public_remark))}</span>` : '')
     + '</button>';
 }
