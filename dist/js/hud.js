@@ -868,6 +868,8 @@ function probeCard(n, net, cells = []) {
   const rate = (v) => (live && v != null && isFinite(v) ? fmtRate(v) : '—');
   const bytes = (v) => (live && v != null && isFinite(v) ? fmtBytes(v) : '—');
   const up = live && m.uptime != null && isFinite(m.uptime) ? fmtUptime(m.uptime) : '—';
+  // 三网行已经有每条线的延迟时，底部再摆一个平均值就是重复；只在三网完全没数时兜底。
+  const hasNetLat = cells.some((c) => c.lat !== '—');
 
   const bar = (label, pct) => `<span class="pbar"><span>${label}</span>`
     + `<span class="track"><i class="fill" style="width:${live ? pct.toFixed(0) : 0}%;background:${pctColor(pct)}"></i></span>`
@@ -888,7 +890,7 @@ function probeCard(n, net, cells = []) {
     + (cells.length ? `<span class="pfoot pnet">${cells.map((c) =>
       `<span class="net" title="${escapeHtml(c.title)}"><b>${escapeHtml(c.label)}</b><span>${c.lat}</span><em class="${c.cls}">${c.lossTxt}</em></span>`
     ).join('')}</span>` : '')
-    + `<span class="pfoot"><span>在线 ${up}</span><span class="hi">${escapeHtml(lat)}</span></span>`
+    + `<span class="pfoot"><span>在线 ${up}</span>${hasNetLat ? '' : `<span class="hi">${escapeHtml(lat)}</span>`}</span>`
     + (n.public_remark ? `<span class="pre" title="${escapeHtml(String(n.public_remark))}">${escapeHtml(String(n.public_remark))}</span>` : '')
     + '</button>';
 }
