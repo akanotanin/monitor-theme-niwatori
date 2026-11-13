@@ -1,5 +1,5 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
-import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js';
+import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.12';
 import { PROBES } from './config.js';
 import { GOOSE } from './goose.js';
 import { DOG } from './dog.js';
@@ -815,7 +815,8 @@ function netCells(n, farm) {
     const full = String(farm.probes[tid] || `#${tid}`);
     const v = freshPing(farm, n.id, tid);
     const lat = v && v.latency != null && isFinite(v.latency) ? `${Math.round(v.latency)}ms` : '—';
-    const raw = loss[tid];
+    // 没有新鲜样本（离线 / 还没轮到这台）连丢包一起给「—」：旧 loss 不代表现在。
+    const raw = v ? loss[tid] : null;
     const hasLoss = raw != null && isFinite(raw);
     const lossTxt = fmtLoss(hasLoss ? raw : null);
     const cls = !hasLoss ? 'none' : (raw >= 5 ? 'bad' : (raw > 0 ? 'warn' : ''));

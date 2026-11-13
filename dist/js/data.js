@@ -610,7 +610,9 @@ export class Farm {
       if (!p || p.task_id == null) continue;
       // hub 返回的数值也做一次类型净化：字符串延迟会让 avg 变成字符串拼接，
       // 甚至把未转义的值拼进详情页 HTML（2026-11-04 复审）。
-      const lat = Number(p.latency);
+      // ★ null/空串是「丢包」，不能 Number(null)=0 当成 0ms（实机 100% 丢包测出来的）。
+      const rawLat = p.latency;
+      const lat = rawLat == null || rawLat === '' ? null : Number(rawLat);
       const ts = Number(p.ts);
       if (!Number.isFinite(ts)) continue;
       const cur = m.get(p.task_id);

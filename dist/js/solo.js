@@ -12,10 +12,10 @@
 // 数值对齐 server/farm_server.py（PROBE_HP=100、玩家啄 12 / 扇翅 8、暴躁鸡啄 9 / 冷却 2.2s、
 // 大白鹅 60 血 / 啄 6 / 领地 2.5m、看门狗 9 伤害 / 冷却 1.1s 等）。
 
-import { Npc } from './npc.js';
+import { Npc } from './npc.js?v=1.0.12';
 import { Goose } from './goose.js';
 import { Dog, DOG } from './dog.js';
-import { CONF } from './data.js';
+import { CONF } from './data.js?v=1.0.12';
 import { resolveCollision, BOUNDS, groundHeight } from './world.js';
 
 const THEME = (typeof window !== 'undefined' && window.CP_THEME) || {};

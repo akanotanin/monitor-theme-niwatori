@@ -157,7 +157,7 @@ async function start() {
 
   // 主题文件在升级瞬间可能还没全部就位（或 CDN 缓存了短暂 404）：
   // 动态 import 重试 3 次；theme-shell 失败不锁农场，避免「农场没启动」整页报错。
-  const V = '1.0.11';
+  const V = '1.0.12';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   async function load(path, tries = 3) {
     let last;
@@ -176,9 +176,14 @@ async function start() {
     await load('./main.js');
   } catch (e) {
     console.error(e);
+    const msg = String((e && e.message) || e);
+    // Three.js r169 只支持 WebGL2：把「没有上下文」翻成能照着做的提示，别只甩一行英文。
+    const noGL = /webgl/i.test(msg);
     lockScreen({
-      title: '农场没有启动',
-      body: `浏览器没能加载 3D 场景（可能需要 WebGL）。${String((e && e.message) || e)}`,
+      title: noGL ? '这台浏览器没有可用的 WebGL2' : '农场没有启动',
+      body: noGL
+        ? '主题的 3D 农场需要 WebGL2。请先开启浏览器的「使用图形加速功能」并重启，更新显卡驱动，或换用最新版 Chrome / Edge；远程桌面或虚拟机请在宿主机启用 GPU。地址栏打开 chrome://gpu（Edge 为 edge://gpu）可查看 WebGL 状态。'
+        : `浏览器没能加载 3D 场景。${msg}`,
       login: false,
     });
     return;

@@ -1,14 +1,14 @@
 // 总装：渲染器、第三人称操控、输入（鼠标/键盘/触屏）、NPC 数据绑定、主循环
 import * as THREE from 'three';
-import { Farm, CONF } from './data.js';
+import { Farm, CONF } from './data.js?v=1.0.12';
 import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js';
 import { Chicken } from './chicken.js';
-import { Npc } from './npc.js';
+import { Npc } from './npc.js?v=1.0.12';
 import { Goose, GOOSE } from './goose.js';
 import { Dog, DOG } from './dog.js';
-import { Hud } from './hud.js?v=1.0.11';
+import { Hud } from './hud.js?v=1.0.12';
 import { Net } from './net.js';
-import { SoloFarm } from './solo.js?v=1.0.11';
+import { SoloFarm } from './solo.js?v=1.0.12';
 import { Feathers, Dust } from './feathers.js';
 import { Sfx } from './sfx.js';
 import { decorate } from './models.js';

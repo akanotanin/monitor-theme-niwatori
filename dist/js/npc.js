@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Chicken } from './chicken.js';
 import { resolveCollision, BOUNDS, groundHeight } from './world.js';
 import { sample, push } from './interp.js';
-import { CONF, fmtRate, fmtPct, fmtUptime, shortCpu, seenAgo } from './data.js';
+import { CONF, fmtRate, fmtPct, fmtUptime, shortCpu, seenAgo } from './data.js?v=1.0.12';
 import { PROBES } from './config.js';
 
 const PASTEL = [];   // 已废弃：改用 chicken.js 的 5 套写实羽色（保留常量以免外部引用报错）
