@@ -14,7 +14,7 @@
 
 import { Npc } from './npc.js';
 import { Goose } from './goose.js';
-import { Dog } from './dog.js';
+import { Dog, DOG } from './dog.js';
 import { CONF } from './data.js';
 import { resolveCollision, BOUNDS, groundHeight } from './world.js';
 
@@ -46,6 +46,7 @@ const DOG_WALK = 1.5;
 const DOG_RUN = 4.2;
 const DOG_SENSE = 8.0;
 const DOG_BITE_R = 1.35;
+const DOG_SCARE_T = 4.0;      // 被咬后逃离狗的范围持续多久
 const DOG_R = 0.42;
 const DOG_HOME = { x: -8.6, z: -4.2 };
 
@@ -341,7 +342,7 @@ export class SoloFarm {
         this.faceTo(e, target.pos.x, target.pos.z);
         e.chicken.update(dt, 0);
         if (ai.bitCd <= 0) {
-          ai.bitCd = 1.1;
+          ai.bitCd = DOG.cd;
           e.chicken.bite();
           this.sfx.hit(1);
           // 一嘴把目标推开 1.5m；大白鹅/暴躁鸡会惊一下
@@ -350,7 +351,8 @@ export class SoloFarm {
           target.pos.x = nx; target.pos.z = nz;
           target.pos.y = groundHeight(nx, nz);
           target.group.position.set(nx, target.pos.y, nz);
-          if (target._ai) target._ai.fleeT = Math.max(target._ai.fleeT || 0, 1.4);
+          this.damage(target, DOG.dmg, null);
+          if (target._ai) target._ai.fleeT = Math.max(target._ai.fleeT || 0, DOG_SCARE_T);
         }
       }
       return;
