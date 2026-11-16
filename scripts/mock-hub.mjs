@@ -50,9 +50,11 @@ const NODES = [
   { id: 4, name: '法兰克福 · D4', region: 'DE', os: 'Debian GNU/Linux 11 (bullseye)', kernel: '5.10.0-32-amd64', arch: 'amd64', virt: 'none', cpu_name: 'Intel Xeon E5-2680 v4', cpu_cores: 2, mem_total: 2 * 1024 ** 3, swap_total: 1 * 1024 ** 3, disk_total: 20 * 1024 ** 3, public_remark: '年付 · 存储型', price: 12, currency: 'CNY', billing_cycle: 'year', day_rx: null, day_tx: null },
   { id: 5, name: '新加坡 · E5', region: 'SG', os: 'Rocky Linux 9.4', kernel: '5.14.0-427', arch: 'arm64', virt: 'kvm', cpu_name: 'Ampere Altra', cpu_cores: 4, mem_total: 8 * 1024 ** 3, swap_total: 0, disk_total: 60 * 1024 ** 3, public_remark: '', price: 22, currency: 'CNY', billing_cycle: 'month', day_rx: null, day_tx: null },
   { id: 6, name: '广州 · F6', region: 'CN', os: 'Debian GNU/Linux 12 (bookworm)', kernel: '6.1.0-30-amd64', arch: 'amd64', virt: 'none', cpu_name: 'Intel Xeon E3-1275 v6', cpu_cores: 8, mem_total: 32 * 1024 ** 3, swap_total: 2 * 1024 ** 3, disk_total: 500 * 1024 ** 3, public_remark: '家宽 · 大硬盘', price: 0, currency: 'CNY', billing_cycle: '', day_rx: 20 * 1024 ** 3, day_tx: 9 * 1024 ** 3 },
+  // 超长名字：卡片名字必须省略号截断，不能把卡片/列表撑出横向滚动
+  { id: 7, name: '达拉斯 · 一个名字特别特别长的节点用来测试截断', region: 'US', os: 'Debian GNU/Linux 13 (trixie)', kernel: '6.12.0-8-amd64', arch: 'amd64', virt: 'kvm', cpu_name: 'AMD EPYC 9654', cpu_cores: 4, mem_total: 16 * 1024 ** 3, swap_total: 0, disk_total: 200 * 1024 ** 3, public_remark: '名字很长很长很长很长很长很长很长很长很长很长很长很长很长', price: 30, currency: 'USD', billing_cycle: 'month', day_rx: 1.4 * 1024 ** 3, day_tx: 0.6 * 1024 ** 3 },
 ];
 
-const ONLINE = new Set([1, 2, 3, 6]);
+const ONLINE = new Set([1, 2, 3, 6, 7]);
 
 function metricsFor(node, t = Date.now()) {
   const i = node.id - 1;
@@ -124,9 +126,12 @@ function nodeView(node) {
   };
 }
 
+// 九个探测任务：三个地区 × 三网 —— 和真实站点一样（每网不止一个任务），
+// 用来验证「三网」那一行是按运营商归并、而不是把前三个任务原样铺开。
 const PING_TASKS = [
-  { id: 1, name: '上海移动' },
-  { id: 2, name: '北京联通' },
+  { id: 1, name: '北京电信' }, { id: 2, name: '北京联通' }, { id: 3, name: '北京移动' },
+  { id: 4, name: '上海电信' }, { id: 5, name: '上海联通' }, { id: 6, name: '上海移动' },
+  { id: 7, name: '广州电信' }, { id: 8, name: '广州联通' }, { id: 9, name: '广州移动' },
 ];
 
 function pingSeries(nodeId, hours = 1, t = Date.now()) {
@@ -136,17 +141,21 @@ function pingSeries(nodeId, hours = 1, t = Date.now()) {
   const loss = {};
   for (const task of PING_TASKS) {
     let lost = 0, total = 0;
+    const base = 60 + (task.id % 3) * 55 + (nodeId % 3) * 8;
     for (let ts = since; ts <= t; ts += step) {
-      const base = task.id === 1 ? 95 : 155;
       const wave = 30 * Math.sin(ts / 900000 + task.id + nodeId);
       let v = Math.round(base + wave + (Math.random() * 14 - 7));
-      // 节点 2（香港）对北京联通丢包多一点；其余基本不丢
-      if (task.id === 2 && nodeId === 2 && Math.random() < 0.08) v = -1;
+      // 节点 2（香港）对联通丢包多一点；节点 3 偶尔掉一点；其余基本不丢
+      const p = task.id === 8 && nodeId === 2 ? 0.08 : (nodeId === 3 && task.id % 3 === 2 ? 0.01 : 0);
+      if (p && Math.random() < p) v = -1;
       total += 1;
       if (v < 0) { lost += 1; ping.push({ task_id: task.id, ts: Math.floor(ts / 1000), latency: null }); }
       else ping.push({ task_id: task.id, ts: Math.floor(ts / 1000), latency: v });
     }
-    loss[task.id] = total ? Math.round(lost / total * 1000) / 10 : 0;
+    // 真实 hub 只把「有丢包」的任务放进 loss：0 丢包的任务这里根本没有键。
+    // 卡片要能在这个前提下显示 0%，不能一律当成「没数据」。
+    const pct = total ? Math.round(lost / total * 1000) / 10 : 0;
+    if (pct > 0) loss[task.id] = pct;
   }
   return { ping, probes: Object.fromEntries(PING_TASKS.map((t2) => [t2.id, t2.name])), loss };
 }

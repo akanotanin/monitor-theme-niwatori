@@ -1,5 +1,5 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
-import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.12';
+import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.13';
 import { PROBES } from './config.js';
 import { GOOSE } from './goose.js';
 import { DOG } from './dog.js';
@@ -796,8 +796,12 @@ function escapeHtml(s) {
 // 名字/国旗/系统/虚拟化/核数 + CPU·内存·磁盘 + 实时网速 + 今日流量 + 三网延迟/丢包 + 延迟 + 在线时长 + 公开备注。
 // 主机名/IP/探测目标一律不在这里出现（和详情抽屉同一条隐私口径）。
 
-/** 三网探测：优先挑名字里带电信/联通/移动的条目，不足三个再用其它任务补满。
- *  每个条目只取该节点当前的新鲜样本；延迟和丢包并排显示，和卡片其它数值一样缺数据给「—」。 */
+/** 三网探测：**一个运营商一格**。
+ *  站点常常给每个运营商都挂好几个地区的任务（北京/上海/广州 × 电信/联通/移动），
+ *  以前按「电信→联通→移动」的次序取前三个任务，于是三格全是电信、联通/移动一个都看不到。
+ *  现在先按运营商归组：组内取各自的新鲜样本算平均延迟、平均丢包，明细写进悬停提示；
+ *  认不出运营商的站（任务名叫「HK-01」之类）按任务各自成组，行为跟以前一样。
+ *  不足三组时按 id 用其它任务补位。 */
 function netCells(n, farm) {
   const live = farm.ping.get(n.id);
   const loss = farm.lossByNode.get(n.id) || {};
@@ -808,22 +812,42 @@ function netCells(n, farm) {
   }
   if (live) for (const tid of live.keys()) ids.add(tid);
   if (!ids.size) return [];
-  // 固定成 电信 → 联通 → 移动 的顺序；其它任务排在后面补位。
-  const pick = [...ids].sort((a, b) =>
-    netRank(farm.probes[a]) - netRank(farm.probes[b]) || a - b).slice(0, 3);
-  return pick.map((tid) => {
+  const groups = new Map();
+  for (const tid of [...ids].sort((a, b) => a - b)) {
     const full = String(farm.probes[tid] || `#${tid}`);
-    const v = freshPing(farm, n.id, tid);
-    const lat = v && v.latency != null && isFinite(v.latency) ? `${Math.round(v.latency)}ms` : '—';
-    // 没有新鲜样本（离线 / 还没轮到这台）连丢包一起给「—」：旧 loss 不代表现在。
-    const raw = v ? loss[tid] : null;
-    const hasLoss = raw != null && isFinite(raw);
-    const lossTxt = fmtLoss(hasLoss ? raw : null);
-    const cls = !hasLoss ? 'none' : (raw >= 5 ? 'bad' : (raw > 0 ? 'warn' : ''));
-    return {
-      label: netLabel(full, tid), lat, lossTxt, cls,
-      title: `${full} · 延迟 ${lat} · 丢包 ${lossTxt}`,
-    };
+    const key = netKind(full) || netLabel(full, tid);
+    if (!groups.has(key)) groups.set(key, { key, rank: netRank(full), tasks: [] });
+    groups.get(key).tasks.push({ tid, full });
+  }
+  // 固定成 电信 → 联通 → 移动 的顺序；其它任务排在后面补位。
+  const pick = [...groups.values()]
+    .sort((a, b) => a.rank - b.rank || a.tasks[0].tid - b.tasks[0].tid)
+    .slice(0, 3);
+  return pick.map((g) => {
+    const lats = [];
+    const losses = [];
+    const parts = [];
+    for (const t of g.tasks) {
+      const v = freshPing(farm, n.id, t.tid);
+      const lat = v && v.latency != null && isFinite(v.latency) ? v.latency : null;
+      // 没有新鲜样本（离线 / 还没轮到这台）连丢包一起给「—」：旧 loss 不代表现在。
+      const raw = v ? loss[t.tid] : null;
+      const okLoss = raw != null && isFinite(raw) ? raw : null;
+      if (lat != null) lats.push(lat);
+      if (okLoss != null) losses.push(okLoss);
+      parts.push(`${t.full} ${lat == null ? '—' : `${Math.round(lat)}ms`}`
+        + (okLoss == null ? '' : `/${fmtLoss(okLoss)}`));
+    }
+    const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
+    const latV = mean(lats);
+    const lossV = mean(losses);
+    const lat = latV == null ? '—' : `${Math.round(latV)}ms`;
+    const lossTxt = fmtLoss(lossV);
+    const cls = lossV == null ? 'none' : (lossV >= 5 ? 'bad' : (lossV > 0 ? 'warn' : ''));
+    const title = (g.tasks.length > 1
+      ? `${g.key}：${parts.join(' · ')} · 平均延迟 ${lat}`
+      : `${g.tasks[0].full} · 延迟 ${lat}`) + ` · 丢包 ${lossTxt}`;
+    return { label: netLabel(g.tasks[0].full, g.tasks[0].tid), lat, lossTxt, cls, title };
   });
 }
 /** 只认新鲜样本：口径和 farm._aggregate 的 maxPingAge 一致（_age 会处理访客/hub 时钟差）。 */

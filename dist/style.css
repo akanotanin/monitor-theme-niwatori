@@ -69,7 +69,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9fd6ff;
 /* 网络榜：最差的那台飘红 */
 #net-rows .row{display:grid;grid-template-columns:1fr 46px 34px;align-items:center;gap:6px;
   font-size:12px;padding:3px 4px;border-radius:8px}
-#net-rows .row .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#net-rows .row .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #net-rows .row b{font-variant-numeric:tabular-nums;text-align:right;color:var(--accent)}
 #net-rows .row .loss{color:#e8a33d;font-variant-numeric:tabular-nums;text-align:right;font-size:11px}
 #net-rows .row canvas{grid-column:1 / -1;width:100%;height:20px;display:block;opacity:.9}
@@ -136,7 +136,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9fd6ff;
 .tab.on{background:rgba(255,215,102,.22);border-color:rgba(255,215,102,.55);color:#ffe08a}
 /* 资源页六张图：两列三排（窄屏一列） */
 .chart-grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}
-.cpanel{position:relative;border:1px solid rgba(207,232,176,.12);border-radius:10px;padding:8px 10px;background:rgba(255,255,255,.03)}
+.cpanel{position:relative;border:1px solid rgba(207,232,176,.12);border-radius:10px;padding:8px 10px;background:rgba(255,255,255,.03);min-width:0}
 /* 图表的鼠标浮框（kanso 那种：竖线 + 时间 + 各线数值） */
 .cpanel .ctip{position:absolute;z-index:5;pointer-events:none;padding:6px 9px;border-radius:8px;
   background:rgba(12,18,8,.94);border:1px solid rgba(207,232,176,.22);font-size:11px;color:#e8f2d8;
@@ -268,7 +268,7 @@ body.touch #me{bottom:calc(154px + env(safe-area-inset-bottom))}
 #plist .sheet > .note{padding:0 16px 12px}   /* 只给页脚那条；detail/空态里的 .note 不要额外缩进 */
 
 /* 节点卡片：名字 / 状态 / CPU·内存·磁盘 / 网速 / 今日流量 / 延迟 / 在线时长 */
-.pcard{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;
+.pcard{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;min-width:0;
   border:1px solid rgba(207,232,176,.14);background:rgba(255,255,255,.045);color:var(--cream);
   font:inherit;text-align:left;cursor:pointer;transition:background .15s,border-color .15s}
 .pcard:hover{background:rgba(255,215,102,.10);border-color:rgba(255,215,102,.45)}
@@ -293,10 +293,10 @@ body.touch #me{bottom:calc(154px + env(safe-area-inset-bottom))}
 /* 网络信息收成一块：网速 + 今日流量一排，三网延迟/丢包一排；顶部细线把它和资源条分开 */
 .pnetbox{display:flex;flex-direction:column;gap:5px;margin-top:1px;padding-top:7px;
   border-top:1px solid rgba(207,232,176,.12)}
-.pfoot.pio{gap:6px;font-size:10.5px}
+.pfoot.pio{gap:2px 6px;font-size:10.5px;flex-wrap:wrap}
 .pfoot.pio>span{min-width:0;white-space:nowrap}
 .pfoot .ptoday{color:var(--sub)}
-.pfoot.pnet{gap:6px;font-size:10.5px;color:#cbb894}
+.pfoot.pnet{gap:2px 6px;font-size:10.5px;color:#cbb894;flex-wrap:wrap}
 .pfoot.pnet .net{display:inline-flex;align-items:baseline;gap:3px;min-width:0;white-space:nowrap}
 .pfoot.pnet .net b{font-weight:600;color:#d8c39a}
 .pfoot.pnet .net span{color:#e8f0da;font-variant-numeric:tabular-nums}
@@ -316,7 +316,7 @@ body.touch #me{bottom:calc(154px + env(safe-area-inset-bottom))}
   #plist h3{font-size:13px}
   #plist-sum{font-size:11px}
   #plist-admin{font-size:11px;padding:3px 8px}
-  #plist-body{grid-template-columns:1fr;padding:10px 12px;gap:8px}
+  #plist-body{grid-template-columns:minmax(0,1fr);padding:10px 12px;gap:8px}
   #plist-detail{padding:10px 12px calc(16px + env(safe-area-inset-bottom))}
   #tools button,#tools a{width:30px;height:28px;font-size:14px}
   #tools{margin-top:4px;padding-top:4px}

@@ -128,6 +128,13 @@ async function record(name, path, opts, checks) {
       detail: !document.getElementById('plist-detail')?.classList.contains('hidden'),
       cards: document.querySelectorAll('.pcard').length,
       canvases: document.querySelectorAll('#plist canvas').length,
+      // 三网那一行：每个运营商一格（电信/联通/移动）；列表本身不能有横向溢出
+      net: [...document.querySelectorAll('.pcard .pnet')].slice(0, 3)
+        .map((n) => [...n.querySelectorAll('.net b')].map((b) => b.textContent)),
+      overflow: (() => {
+        const b = document.getElementById('plist-body');
+        return b ? b.scrollWidth - b.clientWidth : null;
+      })(),
       title: document.title,
       models: !!(window.CP_THEME && window.CP_THEME.models),
       pfModels: window.__pfModels || 0,
@@ -147,6 +154,8 @@ async function main() {
   const nodes = await record('nodes-desktop', '/nodes', { width: 1440, height: 900 });
   const detail = await record('detail-desktop', '/node/1', { width: 1440, height: 900 });
   const mobile = await record('farm-mobile', '/', { width: 390, height: 844, dpr: 2 });
+  // 手机上真的把列表打开：卡片文字不能被挤出去（长名字/长备注也不能把列表撑出横向滚动）
+  const nodesMobile = await record('nodes-mobile', '/nodes', { width: 375, height: 780, dpr: 3 });
 
   // Tab 在农场 ⇄ 列表之间切地址
   {
@@ -213,12 +222,18 @@ async function main() {
     results.push({ name: 'private-lock', ...privateSite });
   }
 
+  const threeNet = (r) => Array.isArray(r.net) && r.net.length > 0
+    && r.net.every((row) => Array.isArray(row) && row.join('/') === '电信/联通/移动');
   const report = {
     base: BASE,
-    farm, farmDay, nodes, detail, mobile, privateSite,
+    farm, farmDay, nodes, detail, mobile, nodesMobile, privateSite,
     checks: results,
     ok: results.every((r) => r.ok !== false)
       && farm.npcs > 0 && farm.pfModels > 10 && nodes.paused === true && detail.detail === true
+      // 三网：一格一个运营商（以前三个任务全是电信时这里会是 电信/电信/电信）
+      && threeNet(nodes) && threeNet(nodesMobile)
+      // 列表不能横向溢出（长名字卡片曾把手机端卡片挤出面板）
+      && nodes.overflow === 0 && nodesMobile.overflow === 0
       && results.find((r) => r.name === 'tab-toggle')?.toNodes?.path === '/nodes'
       && results.find((r) => r.name === 'tab-toggle')?.afterBack?.path === '/'
       && results.find((r) => r.name === 'detail-tab-back')?.afterTab?.path === '/nodes'

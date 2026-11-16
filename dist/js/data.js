@@ -606,6 +606,7 @@ export class Farm {
     }
     if (d.probes) Object.assign(this.probes, d.probes);
     const m = new Map();
+    const counts = new Map();          // task_id -> [丢包样本数, 总样本数]
     for (const p of (d.ping || [])) {
       if (!p || p.task_id == null) continue;
       // hub 返回的数值也做一次类型净化：字符串延迟会让 avg 变成字符串拼接，
@@ -615,21 +616,28 @@ export class Farm {
       const lat = rawLat == null || rawLat === '' ? null : Number(rawLat);
       const ts = Number(p.ts);
       if (!Number.isFinite(ts)) continue;
+      const ok = Number.isFinite(lat) && lat >= 0;
+      const c = counts.get(p.task_id) || [0, 0];
+      c[1]++;
+      if (!ok) c[0]++;
+      counts.set(p.task_id, c);
       const cur = m.get(p.task_id);
       if (!cur || ts > cur.ts) {
-        m.set(p.task_id, { latency: Number.isFinite(lat) && lat >= 0 ? lat : null, ts });
+        m.set(p.task_id, { latency: ok ? lat : null, ts });
       }
     }
     this._updatePingSkew(m);
     this.ping.set(n.id, m);
-    if (d.loss) {
-      const loss = {};
-      for (const [tid, v] of Object.entries(d.loss)) {
-        const nv = Number(v);
-        loss[tid] = Number.isFinite(nv) ? nv : null;
-      }
-      this.lossByNode.set(n.id, loss);
+    // 丢包：hub 的 d.loss **只列有丢包的任务**（0 丢包的任务根本没有键），照抄会让大家
+    // 全显示成「—」（实机：卡片三格全是「—」）。先按本次窗口里的样本自己算一遍，
+    // hub 给了数值再覆盖它（hub 的口径更细，没经过 points 降采样）。
+    const loss = {};
+    for (const [tid, [lost, total]] of counts) loss[tid] = total ? (lost / total) * 100 : 0;
+    for (const [tid, v] of Object.entries(d.loss || {})) {
+      const nv = Number(v);
+      if (Number.isFinite(nv)) loss[tid] = nv;
     }
+    this.lossByNode.set(n.id, loss);
     this._netHistPush(n.id, m);
     return m;
   }
