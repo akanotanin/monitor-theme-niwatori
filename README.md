@@ -27,11 +27,15 @@
 ## 本地开发
 
 ```bash
-npm run check      # 静态自检（配置、资源、模型、署名）
+npm run check      # 静态自检（配置、资源、模型、署名）+ 脱敏自检
+npm run check:leaks # 只跑脱敏自检（读本机 .leaklist，可选；不提交）
 npm run mock       # http://127.0.0.1:18099
 npm run verify     # 需要 Chrome 开着 --remote-debugging-port=9333
 npm run package    # release/*.tar.gz
 ```
+
+脱敏自检（`scripts/check-leaks.mjs`）会扫工作区与全部提交信息，查本机绝对路径、非 noreply 邮箱、IPv4、
+运维命令痕迹；仓库根目录若放了 `.leaklist`（一行一个私有域名/主机别名，已 gitignore），这些词也一起扫。
 
 Chrome 示例：
 

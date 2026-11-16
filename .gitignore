@@ -2,3 +2,6 @@ node_modules/
 release/
 .tmp/
 *.log
+
+# 本机脱敏词表（站点域名 / 机群别名，别提交）
+.leaklist
