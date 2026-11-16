@@ -1,5 +1,5 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
-import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.14';
+import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.15';
 import { PROBES } from './config.js';
 import { GOOSE } from './goose.js';
 import { DOG } from './dog.js';
@@ -595,11 +595,43 @@ function latColor(l) {
   return '#ff5a3c';
 }
 
+// 高清画布：位图尺寸 = CSS 尺寸 × devicePixelRatio，绘制坐标仍用逻辑尺寸（760×H 那一套）。
+// 以前位图写死 760px 宽、靠 CSS 拉到面板宽度（桌面常见 1600~2000 CSS px），2x 屏上等于把 760 拉三倍
+// —— 线和小字全是糊的。现在按实际显示尺寸×dpr 出图，窗口缩放/切屏时按新尺寸重画。
+const DPR_MAX = 2.5;                      // 手机上 3x 屏再乘就是白烧性能，2.5 已经看不出锯齿
+const liveCharts = new Map();             // canvas → 最近一次 paint（resize 时统一重画）
+
+const dprNow = () => Math.min(DPR_MAX, Math.max(1, Number(devicePixelRatio) || 1));
+
+/** 把 canvas 的位图尺寸调成「CSS 宽 × dpr」，返回逻辑坐标 → 位图坐标的缩放比。 */
+function fitCanvas(canvas, LW, LH) {
+  const cssW = canvas.getBoundingClientRect().width || 0;
+  // 面板还没显示（详情刚塞进 DOM、容器 display:none）时量不到宽：先按逻辑尺寸画，等 ResizeObserver 回来再重画
+  const scaleW = cssW > 40 ? cssW : LW;
+  const bw = Math.max(1, Math.round(scaleW * dprNow()));
+  const bh = Math.max(1, Math.round(bw * LH / LW));
+  if (canvas.width !== bw || canvas.height !== bh) { canvas.width = bw; canvas.height = bh; }
+  return bw / LW;
+}
+
+if (typeof window !== 'undefined') {
+  // 浏览器缩放会改 CSS 宽（ResizeObserver 能接住）；跨屏换 dpr 只发 resize，这里兜一下
+  const repaintAll = () => {
+    for (const [cv, fn] of liveCharts) {
+      if (!cv.isConnected) liveCharts.delete(cv); else fn();
+    }
+  };
+  addEventListener('resize', repaintAll);
+  addEventListener('visibilitychange', () => { if (!document.hidden) repaintAll(); });
+}
+
 // 折线图（canvas 手绘）。opts.hover=true 时挂上「竖线 + 数值浮框」（kanso 那种）。
 //   format(v) 决定浮框里怎么打印这个值（默认 shortNum + unit）
 function drawLine(canvas, series, { unit = '', max = null, dual = false, long = false, hover = false, format = null } = {}) {
   if (!canvas) return;
-  const W = canvas.width, H = canvas.height;
+  // 逻辑尺寸取第一次进来时的 HTML 属性，之后属性会被改成位图尺寸，不能再读 canvas.width
+  const W = canvas.__lw || (canvas.__lw = canvas.width || 760);
+  const H = canvas.__lh || (canvas.__lh = canvas.height || 170);
   const c = canvas.getContext('2d');
   const padL = 46, padR = 12, padT = 14, padB = 22;
   const iw = W - padL - padR, ih = H - padT - padB;
@@ -630,7 +662,12 @@ function drawLine(canvas, series, { unit = '', max = null, dual = false, long = 
   let cursor = null;
 
   const paint = () => {
-    c.setTransform(1, 0, 0, 1, 0, 0);
+    // 位图尺寸跟着「当前 CSS 宽 × dpr」走，绘制仍用逻辑坐标（setTransform 一次到位）：
+    // 这样文字和线在 2x/3x 屏上都是原生像素，不再是被拉大三倍的 760px 位图。
+    // aspect-ratio 钉死，位图取整不会反过来改布局高度（否则 ResizeObserver 会自己抖）
+    if (!canvas.style.aspectRatio) canvas.style.aspectRatio = `${W} / ${H}`;
+    const k = fitCanvas(canvas, W, H);
+    c.setTransform(k, 0, 0, k, 0, 0);
     c.clearRect(0, 0, W, H);
     c.font = '11px ui-monospace,Consolas,monospace';
     if (!clean.length) {
@@ -744,6 +781,15 @@ function drawLine(canvas, series, { unit = '', max = null, dual = false, long = 
       };
     }
   }
+  // 面板变宽/变窄（窗口缩放、旋转屏、详情从隐藏变可见）都按新尺寸重画一次
+  if (typeof ResizeObserver !== 'undefined') {
+    if (!canvas.__ro) {
+      canvas.__ro = new ResizeObserver(() => { if (canvas.__paint) canvas.__paint(); });
+      canvas.__ro.observe(canvas);
+    }
+  }
+  canvas.__paint = paint;
+  liveCharts.set(canvas, paint);
   paint();
 }
 

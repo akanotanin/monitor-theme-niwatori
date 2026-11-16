@@ -135,6 +135,14 @@ async function record(name, path, opts, checks) {
         const b = document.getElementById('plist-body');
         return b ? b.scrollWidth - b.clientWidth : null;
       })(),
+      // 折线图必须按「CSS 宽 × dpr」出图（旧版位图写死 760px，被拉到面板宽度就是糊的）
+      chart: (() => {
+        const c = document.querySelector('#plist-detail canvas');
+        if (!c) return null;
+        const r = c.getBoundingClientRect();
+        const dpr = Math.min(2.5, Math.max(1, window.devicePixelRatio || 1));
+        return { cssW: Math.round(r.width), bmpW: c.width, dpr, want: Math.round(r.width * dpr) };
+      })(),
       title: document.title,
       models: !!(window.CP_THEME && window.CP_THEME.models),
       pfModels: window.__pfModels || 0,
@@ -152,7 +160,8 @@ async function main() {
   const farm = await record('farm-desktop', '/', { width: 1440, height: 900, wait: 5500 });
   const farmDay = await record('farm-day', '/?light=day', { width: 1440, height: 900, wait: 5500 });
   const nodes = await record('nodes-desktop', '/nodes', { width: 1440, height: 900 });
-  const detail = await record('detail-desktop', '/node/1', { width: 1440, height: 900 });
+  // 详情页按 2x 屏跑：折线图必须按 dpr 出图（1x 下「位图 760 被拉宽」也能蒙混过关）
+  const detail = await record('detail-desktop', '/node/1', { width: 1440, height: 900, dpr: 2 });
   const mobile = await record('farm-mobile', '/', { width: 390, height: 844, dpr: 2 });
   // 手机上真的把列表打开：卡片文字不能被挤出去（长名字/长备注也不能把列表撑出横向滚动）
   const nodesMobile = await record('nodes-mobile', '/nodes', { width: 375, height: 780, dpr: 3 });
@@ -234,6 +243,8 @@ async function main() {
       && threeNet(nodes) && threeNet(nodesMobile)
       // 列表不能横向溢出（长名字卡片曾把手机端卡片挤出面板）
       && nodes.overflow === 0 && nodesMobile.overflow === 0
+      // 图表按 dpr 出图（留 5% 余量给取整）
+      && detail.chart && detail.chart.bmpW >= detail.chart.want * 0.95
       && results.find((r) => r.name === 'tab-toggle')?.toNodes?.path === '/nodes'
       && results.find((r) => r.name === 'tab-toggle')?.afterBack?.path === '/'
       && results.find((r) => r.name === 'detail-tab-back')?.afterTab?.path === '/nodes'
