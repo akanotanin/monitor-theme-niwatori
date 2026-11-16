@@ -11,7 +11,8 @@
 
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -158,13 +159,130 @@ for (const f of REQUIRED_JS) {
 if (!existsSync(join(DIST, 'vendor/three.module.js'))) err('dist/vendor/three.module.js 不存在（3D 引擎）');
 else ok('3D 引擎与主题模块齐全');
 
-// ---------- 国旗 ----------
+// ---------- 模块图闭包 + 语法检查（2026-11-17 加）----------
+// 以前这里只核对 REQUIRED_JS 里的 13 个文件名：删掉 glb-models.js（models.js 静态 import 它）、
+// 删一个 addon、改模块名、importmap 指错路径、给模块写进语法错误 —— check 全部 exit=0，
+// 而这些正是最常见的坏包形态（审查 M12）。现在从 index.html 的入口把整张模块图走一遍，
+// 再对每个自研模块跑 node --check。
+const moduleFiles = [];
+{
+  const IMPORTMAP = { three: 'vendor/three.module.js', 'three/addons/': 'vendor/addons/' };
+  const seen = new Set();
+  const missing = [];
+  const badSpec = [];
+  const queue = [];
+  const push = (rel) => { if (rel && !seen.has(rel)) queue.push(rel); };
+
+  // 入口 1：index.html 里的本地 <script src>
+  for (const m of index.matchAll(/<script[^>]+src="([^"]+)"/g)) {
+    const ref = m[1].split(/[?#]/)[0].replace(/^\.\//, '');
+    if (ref && !ref.startsWith('http') && !ref.startsWith('/')) push(ref);
+  }
+  // 入口 2：importmap 的目标
+  for (const v of Object.values(IMPORTMAP)) if (!existsSync(join(DIST, v))) missing.push(v);
+  // 入口 3：theme-boot 动态 import 的模块（字符串不在静态 import 里也能被扫到）
+  for (const m of index.matchAll(/import\s*\(\s*['"]\.?\/?([^'"?]+\.js)/g)) push(m[1]);
+
+  const resolveRef = (spec, from) => {
+    const s = spec.split(/[?#]/)[0];
+    if (s.startsWith('./') || s.startsWith('../')) return relative(DIST, join(DIST, dirname(from), s));
+    if (IMPORTMAP[s]) return IMPORTMAP[s];
+    for (const [k, v] of Object.entries(IMPORTMAP)) if (k.endsWith('/') && s.startsWith(k)) return v + s.slice(k.length);
+    return null;
+  };
+
+  while (queue.length) {
+    const rel = queue.shift();
+    if (seen.has(rel)) continue;
+    seen.add(rel);
+    const full = join(DIST, rel);
+    if (!existsSync(full)) { missing.push(rel); continue; }
+    if (rel.startsWith('vendor/')) continue;        // vendored（three/addons）只看在不在，不解析内部
+    moduleFiles.push(rel);
+    const src = await readFile(full, 'utf8');
+    const re = /(?:^|[^\w$.])(?:import|export)\s+(?:[^'"]*?\sfrom\s*)?['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const spec = m[1] || m[2];
+      if (!spec || /^(data:|https?:)/.test(spec)) continue;
+      const to = resolveRef(spec, rel);
+      if (!to) { badSpec.push(`${rel} → ${spec}`); continue; }
+      if (!existsSync(join(DIST, to))) missing.push(`${to}（被 ${rel} 引用）`);
+      else push(to);
+    }
+    // 还有一类 import 是拼出来的（theme-boot 的 `load('./main.js')` → import(`${path}?v=`))：
+    // 把源码里出现的相对 .js 字符串字面量也当成入口展开。不存在的只忽略 —— 注释里也可能写路径。
+    for (const m of src.matchAll(/['"](\.{1,2}\/[\w./-]+\.js)(?:\?[^'"]*)?['"]/g)) {
+      const to = resolveRef(m[1], rel);
+      if (to && existsSync(join(DIST, to))) push(to);
+    }
+  }
+  if (missing.length) err(`模块图缺文件：${[...new Set(missing)].slice(0, 6).join('、')}${missing.length > 6 ? ' …' : ''}`);
+  if (badSpec.length) err(`模块图里有解析不了的 import（既不是相对路径也不是 importmap）：${badSpec.slice(0, 4).join('、')}`);
+
+  // 语法检查：ESM 语法错（多写/少写括号、注释吞掉语句）在浏览器里就是整页白屏
+  const syn = [];
+  for (const rel of moduleFiles) {
+    try {
+      execFileSync(process.execPath, ['--check', join(DIST, rel)], { stdio: 'pipe' });
+    } catch (e) {
+      const line = String(e.stderr || e.message || '').split('\n').find((l) => /Error|error/.test(l)) || '语法错误';
+      syn.push(`${rel}：${line.trim().slice(0, 120)}`);
+    }
+  }
+  if (syn.length) err(`node --check 失败：\n    ${syn.join('\n    ')}`);
+  if (!missing.length && !badSpec.length && !syn.length) ok(`模块图 ${moduleFiles.length} 个模块、语法检查全部通过`);
+}
+// ---------- 国旗：按清单集合比对 ----------
+// 只数数量的话，删掉 cn.png 还剩 249 面 ≥ 240，检查照样通过（审查 M12）。
+const FLAG_CODES = ('ad ae af ag ai al am ao aq ar as at au aw ax az ba bb bd be bf bg bh bi bj bl bm bn bo bq br bs bt bv bw by bz ca cc cd cf cg ch ci ck cl cm cn co cr cu cv cw c'
+  + 'x cy cz de dj dk dm do dz ec ee eg eh er es et fi fj fk fm fo fr ga gb gd ge gf gg gh gi gl gm gn gp gq gr gs gt gu gw gy hk hm hn hr ht hu id ie il im in io iq'
+  + ' ir is it je jm jo jp ke kg kh ki km kn kp kr kw ky kz la lb lc li lk lr ls lt lu lv ly ma mc md me mf mg mh mk ml mm mn mo mp mq mr ms mt mu mv mw mx my mz na'
+  + ' nc ne nf ng ni nl no np nr nu nz om pa pe pf pg ph pk pl pm pn pr ps pt pw py qa re ro rs ru rw sa sb sc sd se sg sh si sj sk sl sm sn so sr ss st sv sx sy sz t'
+  + 'c td tf tg th tj tk tl tm tn to tr tt tv tw tz ua ug um us uy uz va vc ve vg vi vn vu wf ws xk ye yt za zm zw').split(/\s+/);
 try {
-  const flags = await readdir(join(DIST, 'vendor/flags'));
-  if (flags.length < 240) err(`dist/vendor/flags 只有 ${flags.length} 面国旗（应 ≥240）`);
-  else ok(`国旗 ${flags.length} 面`);
+  const flags = (await readdir(join(DIST, 'vendor/flags'))).filter((f) => f.endsWith('.png')).map((f) => f.slice(0, -4));
+  const got = new Set(flags);
+  const want = new Set(FLAG_CODES);
+  const miss = FLAG_CODES.filter((c) => !got.has(c));
+  const extra = flags.filter((c) => !want.has(c));
+  if (miss.length) err(`国旗缺 ${miss.length} 面：${miss.slice(0, 8).join(', ')}${miss.length > 8 ? ' …' : ''}`);
+  else if (extra.length) err(`国旗多出清单外的 ${extra.length} 面：${extra.slice(0, 8).join(', ')}`);
+  else ok(`国旗 ${flags.length} 面（与 ISO 3166-1 + XK 清单一致）`);
 } catch {
   err('dist/vendor/flags 目录不存在');
+}
+
+// ---------- 版本号单源：theme.json 是唯一真源 ----------
+// 版本号以前散在 15 处（theme.json / package.json / ?v= / theme-boot 的 V / README 包名），
+// 没有任何一处校验一致性 —— 改漏一个就会出现「浏览器还拿旧的缓存模块」（审查 L5）。
+if (manifest?.version) {
+  const ver = String(manifest.version);
+  const wrong = [];
+  try {
+    const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+    if (pkg.version !== ver) wrong.push(`package.json=${pkg.version}`);
+  } catch { wrong.push('package.json 读不出来'); }
+  try {
+    const boot = await readFile(join(DIST, 'js/theme-boot.js'), 'utf8');
+    const bv = (boot.match(/const V = '([^']+)'/) || [])[1];
+    if (bv !== ver) wrong.push(`theme-boot.js V=${bv}`);
+  } catch { /* 模块图那关已经报过 */ }
+  const scan = new Set([...moduleFiles, 'index.html', 'style.css', 'theme.css']);
+  for (const rel of scan) {
+    let src;
+    try { src = await readFile(join(DIST, rel), 'utf8'); } catch { continue; }
+    for (const m of src.matchAll(/\?v=([0-9A-Za-z.\-]+)/g)) if (m[1] !== ver) wrong.push(`${rel} ?v=${m[1]}`);
+  }
+  try {
+    const readme = await readFile(join(ROOT, 'README.md'), 'utf8');
+    for (const m of readme.matchAll(/monitor-theme-niwatori-([0-9.]+)\.tar\.gz/g)) {
+      if (m[1] !== ver) wrong.push(`README 包名 ${m[1]}`);
+    }
+  } catch { /* 没有 README 就算了 */ }
+  const uniq = [...new Set(wrong)];
+  if (uniq.length) err(`版本号不一致（theme.json = ${ver}）：${uniq.slice(0, 8).join('、')}`);
+  else ok(`版本号一致：${ver}（${scan.size} 个 dist 文件 + package.json + README）`);
 }
 
 // ---------- 精细模型（GLB · CC BY 4.0）----------

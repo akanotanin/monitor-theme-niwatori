@@ -8,7 +8,7 @@
 // 模型挂在 `chicken` 上：main.js 里 npc.chicken.* 的老路径（射线点选、名牌淡出、手机点击球）直接可用。
 import * as THREE from 'three';
 import { sample, push } from './interp.js';
-import { loadModel } from './glb-models.js';
+import { cloneModel } from './glb-models.js';
 
 // 与 server/farm_server.py 的 DOG_* 必须一致（tools/ci.sh 第 2 步会点名核对）
 export const DOG = {
@@ -113,7 +113,9 @@ export class DogBody {
   async loadModel() {
     // 精细模型始终开启（模型随包分发）；拉不到就保留已经建好的方块狗。
     try {
-      const g = await loadModel(DOG_ID, LOAD_TIMEOUT);
+      // ⚠ 必须 clone：loadModel 返回的是缓存里的**同一个 scene**，直接 add 会被 Object3D.add
+      //   从上一只狗身上摘走 —— 后台把看门狗设成 2 只后，先建的那只只剩名牌（2026-11-17 审查）。
+      const g = await cloneModel(DOG_ID, LOAD_TIMEOUT);
       if (this._dead) return;
       // GLB 的局部原点不在脚底/身体中心（这只看门狗偏出去好几米）：按包围盒把
       // 水平中心挪回 bodyG 的原点、底面贴到 y=0，否则狗会在离自己名牌十几米的地方跑。

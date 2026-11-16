@@ -43,9 +43,12 @@ export function parseTime(v) {
     const m = s.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/);
     if (m) t = Date.parse(m[1] + (m[2] ? m[2].slice(0, 4) : '') + (m[3] || 'Z'));
   }
-  return isFinite(t) ? t / 1000 : null;
+  if (!isFinite(t)) return null;
+  const sec = t / 1000;
+  // Go time.Time 的零值是 0001-01-01：字段缺失/服务端异常时会算出约 2×10⁹ 秒的「上次上报」，
+  // 页面上就是一个天文数字（审查 L14）。2000 年以前的时间在这里没有意义，一律当没有。
+  return sec < 946684800 ? null : sec;
 }
-
 /** 国家码：Komari 的 region 正常是两位字母；其它写法退化成空（前端显示 🌐）。 */
 export function countryCode(region) {
   const s = String(region || '').trim();

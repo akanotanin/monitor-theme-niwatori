@@ -1,13 +1,19 @@
 {
   "name": "monitor-theme-niwatori",
+  "version": "1.0.16",
   "private": true,
-  "version": "1.0.15",
   "type": "module",
   "description": "Monitor theme: a playable 3D chicken farm built on cyber-probe",
+  "license": "MIT",
+  "author": "akanotanin",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akanotanin/monitor-theme-niwatori.git"
+  },
   "scripts": {
     "check": "node scripts/check.mjs && node scripts/check-leaks.mjs",
     "check:leaks": "node scripts/check-leaks.mjs",
-    "package": "node scripts/package.mjs",
+    "package": "node scripts/check.mjs && node scripts/package.mjs",
     "mock": "node scripts/mock-hub.mjs --port 18099",
     "verify": "node scripts/cdp-verify.mjs"
   },

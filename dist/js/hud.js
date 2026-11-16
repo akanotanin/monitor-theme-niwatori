@@ -1,5 +1,5 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
-import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.15';
+import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.16';
 import { PROBES } from './config.js';
 import { GOOSE } from './goose.js';
 import { DOG } from './dog.js';
@@ -28,6 +28,17 @@ export class Hud {
     this._plistSig = '';
     this._detailToken = 0;
     this._detailReq = 0;          // 详情内档位/页签请求的序号：后发先至不能覆盖新结果
+    this._detailAc = null;        // 详情请求的取消器（换节点/换档/关面板/切后台都真取消）
+    this._detailAborted = false;  // 详情在切后台时被打断 → 回到前台自动重试
+    this._detailTarget = null;    // 当前详情目标（重试用）
+    // 切回前台：重画图表 + 把被打断的详情自动补上（farm.resume 只刷新节点列表，不碰详情）
+    addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      if (this._detailAborted && this.view === 'detail' && this._detailTarget) {
+        this._detailAborted = false;
+        this.showDetail(this._detailTarget, { keepRange: true });
+      }
+    });
     $('btn-probes')?.addEventListener('click', () => this.toggleProbes());
     this.plistBack?.addEventListener('click', () => this.backToList());
     $('plist-close')?.addEventListener('click', () => this.hideProbes());
@@ -76,6 +87,7 @@ export class Hud {
     this.probesOpen = true;
     this.view = 'list';
     this._detailToken++;               // 让在途的详情渲染作废
+    this._detailAc?.abort(); this._detailAc = null;
     this.plist.classList.remove('is-detail');
     this.plist.classList.remove('hidden');
     this.plistBody.classList.remove('hidden');
@@ -93,6 +105,7 @@ export class Hud {
     this.probesOpen = false;
     this.view = 'list';
     this._detailToken++;
+    this._detailAc?.abort(); this._detailAc = null;
     this.plist.classList.remove('is-detail');
     this.plist.classList.add('hidden');
   }
@@ -106,6 +119,7 @@ export class Hud {
     if (!this.plist) return;
     this.view = 'list';
     this._detailToken++;
+    this._detailAc?.abort(); this._detailAc = null;
     this.plist.classList.remove('is-detail');
     this.plistDetail.classList.add('hidden');
     this.plistBody.classList.remove('hidden');
@@ -249,9 +263,12 @@ export class Hud {
 
   // ---------- 详情（就在探针列表悬浮层里显示；右侧抽屉已删）----------
   /** 打开面板并切到详情视图。target: {kind:'probe',nodeId} / {kind:'web',taskId} / {kind:'goose'|'dog'} */
-  async showDetail(target) {
+  async showDetail(target, opts = {}) {
     if (!this.plist) return;
-    this._rangeIdx = null;        // 每次打开都回到默认档位（24 小时），别沿用上一条的
+    // 每次打开都回到默认档位（24 小时），别沿用上一条的；切后台被打断后的自动重试要保留档位
+    if (!opts.keepRange) this._rangeIdx = null;
+    this._detailTarget = target;
+    this._detailAborted = false;
     if (!this.probesOpen) this.showProbes();          // 从场地上点鸡进来：先把面板打开（顺带解锁指针）
     if (!this.probesOpen) return;
     this.view = 'detail';
@@ -265,13 +282,24 @@ export class Hud {
     this.plistDetail.innerHTML = '<p class="note">正在读探针数据…</p>';
     this._nodeTab = 'res';             // 每次打开详情都落在「资源」页签
     const token = ++this._detailToken;
+    // 新详情作废上一轮的 fan-out：关面板/换节点时在途请求要真取消，而不是跑完再被 token 丢掉
+    this._detailAc?.abort();
+    this._detailAc = null;
     try {
       if (target.kind === 'probe') await this.renderNodeDetail(target, token);
       else if (target.kind === 'web') await this.renderTaskDetail(target, token);
       else if (target.kind === 'goose') this.renderGooseDetail(target);
       else if (target.kind === 'dog') this.renderDogDetail(target);
     } catch (e) {
-      if (e && e.name === 'AbortError') return;      // 切后台/关面板触发的 abort 不是数据错误
+      // 切后台/关面板触发的 abort 不是数据错误，但要留一句可恢复的提示：
+      // 以前这里直接 return，面板会永久停在「正在读探针数据…」，回到前台也不会重拉（审查 H2）。
+      if (e && e.name === 'AbortError') {
+        if (token === this._detailToken) {
+          this._detailAborted = !!document.hidden;   // 只有切后台才自动重试；关面板/换节点不该自己弹回来
+          this.plistDetail.innerHTML = '<p class="note">读取被中断（切回页面会自动继续）…</p>';
+        }
+        return;
+      }
       if (token === this._detailToken) {
         this.plistTitle.textContent = '读取失败';
         this.plistDetail.innerHTML = `<p class="note">读取失败：${escapeHtml(String(e.message || e))}</p>`;
@@ -347,7 +375,9 @@ export class Hud {
 
   async _drawNode(n, range, token, force) {
     const req = ++this._detailReq;
-    const d = await this.farm.nodeDetail(n.id, { hours: range.hours, points: range.points, force });
+    this._detailAc?.abort();
+    const ac = (this._detailAc = new AbortController());
+    const d = await this.farm.nodeDetail(n.id, { hours: range.hours, points: range.points, force, signal: ac.signal });
     if (token !== this._detailToken || req !== this._detailReq) return;
     const rows = d.metrics || [];
     const ping = d.ping || [];
@@ -535,6 +565,10 @@ export class Hud {
   // 网站鸡详情：各节点在这条探测任务上的延迟曲线（时间范围可变）
   async _drawTask(taskId, range, token, force) {
     const req = ++this._detailReq;
+    // 每次换档/换节点都真取消上一轮的请求：几百台节点的站上，切一次档就是一轮历史查询，
+    // 只靠 token 丢弃结果的话，请求照样打满 hub 的查询闸门（审查 M4）。
+    this._detailAc?.abort();
+    const ac = (this._detailAc = new AbortController());
     // 哪吒：一次 /service/<id>/history?period=1d 就拿到所有节点的曲线 —— 别再按节点数放大请求。
     if (CONF.source === 'nezha') {
       const d = await this.farm.taskHistory(taskId, {
@@ -560,7 +594,18 @@ export class Hud {
     }
     // hub 的历史查询并发上限实测是 4（data.js 里首屏只用 3 个 worker 就是为这个）：
     // 这里以前 Promise.all 一次并发全部节点，超出的吃 503、被下面的 catch 吞掉，图上静默少线。
-    const nodes = this.farm.nodes;
+    // 只画最差的一小撮节点：这张图本来就是看「谁在拖后腿」，几十上百条线读不出来，
+    // 而一档 = 节点数 × 1 次历史查询（Komari 源还是 ×2），几百台的站上正好把 hub 的
+    // 历史查询闸门打满、详情长时间空白（审查 M4）。按该任务最新延迟从差到好取前 N 台。
+    const capN = 16;
+    const order = (n) => {
+      const v = this.farm.ping.get(n.id)?.get(taskId);
+      if (!v) return -1;                                    // 没有样本：排最后
+      return Number.isFinite(v.latency) ? v.latency : 1e9;  // 丢包（latency=null）：排最前
+    };
+    const pool = this.farm.nodes.filter((n) => n.online);
+    const nodes = pool.slice().sort((a, b) => order(b) - order(a)).slice(0, capN);
+    const omitted = pool.length - nodes.length;
     const results = new Array(nodes.length);
     let next = 0;
     const worker = async () => {
@@ -568,7 +613,7 @@ export class Hud {
         const i = next++;
         const n = nodes[i];
         try {
-          const d = await this.farm.nodeDetail(n.id, { hours: range.hours, points: range.points, force });
+          const d = await this.farm.nodeDetail(n.id, { hours: range.hours, points: range.points, force, signal: ac.signal });
           results[i] = { n, pts: (d.ping || []).filter((p) => p.task_id === taskId).map((p) => [p.ts, p.latency]) };
         } catch { results[i] = null; }
       }
@@ -578,7 +623,7 @@ export class Hud {
     const series = [];
     for (const r of results) if (r && r.pts.length) series.push({ name: r.n.name, color: PALETTE[series.length % PALETTE.length], pts: r.pts });
 
-    h4Text('h-t1', `各节点延迟（${range.label}）`);
+    h4Text('h-t1', `各节点延迟（${range.label}）${omitted > 0 ? ` · 只画最差 ${nodes.length} 台（共 ${pool.length} 台）` : ''}`);
     $('legend').innerHTML = series.map((s) => `<span class="chip"><b style="color:${s.color}">■</b> ${escapeHtml(s.name)}</span>`).join('');
     drawLine($('c1'), series, {
       unit: 'ms', long: spanSec(...series.map((s) => s.pts)) > 12 * 3600,
@@ -731,8 +776,13 @@ function drawLine(canvas, series, { unit = '', max = null, dual = false, long = 
       tip = document.createElement('div');
       tip.className = 'ctip hidden';
       host.appendChild(tip);
-      const onMove = (e) => {
-        if (!tss.length) return;
+      // hover 合并到一帧一次：mousemove 一秒能来上百次，每次全量重画整张图 + 读 canvas rect、
+      // 写 tip、再读 tip 尺寸（写后读 = 强制同步布局）能把主线程压满（2026-11-17 审查 M6）。
+      let hoverEvt = null, hoverRaf = 0;
+      const drawHover = () => {
+        hoverRaf = 0;
+        const e = hoverEvt;
+        if (!e || !tss.length) return;
         const r = canvas.getBoundingClientRect();
         const px = (e.clientX - r.left) / (r.width || 1) * W;
         // 找离光标最近的时间戳
@@ -746,8 +796,11 @@ function drawLine(canvas, series, { unit = '', max = null, dual = false, long = 
         cursor = best;
         paint();
         const row = rows.get(best) || {};
-        tip.innerHTML = `<div class="ct">${fmtTipTime(best)}</div>` + series.map((s, i) =>
-          `<div class="cr"><i style="background:${s.color}"></i><span>${escapeHtml(s.name)}</span><b>${escapeHtml(String(fmt(row[i])))}</b></div>`).join('');
+        tip.innerHTML = `<div class="ct">${fmtTipTime(best)}</div>` + series.map((s, i) => {
+          // 三态：这个时刻这条线没有采样（键都不在）→「—」；有采样但值是 null（真丢包）→ fmt 的「无响应」
+          const has = Object.prototype.hasOwnProperty.call(row, i);
+          return `<div class="cr"><i style="background:${s.color}"></i><span>${escapeHtml(s.name)}</span><b>${escapeHtml(String(has ? fmt(row[i]) : '—'))}</b></div>`;
+        }).join('');
         tip.classList.remove('hidden');
         // 跟着鼠标走：默认在光标右下；靠近右边/下边就翻到左上，最后再夹在卡片内。
         const hr = host.getBoundingClientRect();
@@ -767,7 +820,14 @@ function drawLine(canvas, series, { unit = '', max = null, dual = false, long = 
         tip.style.left = `${left}px`;
         tip.style.top = `${top}px`;
       };
+      const onMove = (e) => {
+        if (!tss.length) return;
+        hoverEvt = e;
+        if (!hoverRaf) hoverRaf = requestAnimationFrame(drawHover);
+      };
       const onLeave = () => {
+        hoverEvt = null;
+        if (hoverRaf) { cancelAnimationFrame(hoverRaf); hoverRaf = 0; }
         cursor = null;
         paint();
         tip.classList.add('hidden');
@@ -777,6 +837,7 @@ function drawLine(canvas, series, { unit = '', max = null, dual = false, long = 
       canvas.__ctipCleanup = () => {
         canvas.removeEventListener('mousemove', onMove);
         canvas.removeEventListener('mouseleave', onLeave);
+        if (hoverRaf) { cancelAnimationFrame(hoverRaf); hoverRaf = 0; }
         tip.remove();
       };
     }

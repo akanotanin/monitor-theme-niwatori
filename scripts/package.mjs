@@ -11,7 +11,7 @@
 
 import { createHash } from 'node:crypto';
 import { readFile, readdir, writeFile, mkdir, stat } from 'node:fs/promises';
-import { dirname, join, resolve, relative } from 'node:path';
+import { dirname, join, resolve, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
@@ -24,6 +24,17 @@ if (!(await stat(join(DIST, 'index.html'))).isFile()) throw new Error('缺少 di
 
 const version = String(manifest.version || '0.0.0');
 const short = String(manifest.short).toLowerCase();
+// 版本号会被拼进输出文件名：只允许字母数字点横线，且不能有 ..（`1.0.15/../../x` 会把包写到 release/ 之外）
+if (!/^[0-9A-Za-z][0-9A-Za-z.\-]*$/.test(version) || version.includes('..')) {
+  throw new Error(`theme.json 的 version 不合法: ${version}`);
+}
+// 预览图路径必须落在仓库内（manifest 是手写文件，不该能读仓库外的任意文件）
+const previewPath = resolve(ROOT, manifest.preview || 'preview.png');
+if (!previewPath.startsWith(ROOT + sep)) throw new Error(`theme.json 的 preview 越界: ${manifest.preview}`);
+// 第三方许可与署名必须随包分发（three.js 的 MIT 要求「所有副本都带许可全文」）
+if (!(await stat(join(ROOT, 'THIRD-PARTY-NOTICES.md'))).isFile()) {
+  throw new Error('缺少 THIRD-PARTY-NOTICES.md（第三方许可与署名，必须随包分发）');
+}
 
 // ---------- 收集文件（tar 内路径用 /）----------
 const files = [];
@@ -35,12 +46,16 @@ async function walk(dir, rel = '') {
     else if (e.isFile()) files.push({ full, name: r });
   }
 }
-for (const name of ['theme.json', 'LICENSE', manifest.preview || 'preview.png']) {
+for (const name of ['theme.json', 'LICENSE', 'THIRD-PARTY-NOTICES.md', manifest.preview || 'preview.png']) {
   const full = join(ROOT, name);
   try { if ((await stat(full)).isFile()) files.push({ full, name }); } catch { /* preview 可以没有 */ }
 }
 await walk(DIST, 'dist');
-files.sort((a, b) => a.name.localeCompare(b.name));
+// 字节序排序（localeCompare 依赖 locale/ICU：同一份源码在不同机器上会排出不同的包，哈希就不可复验）
+files.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+// tar 头里的 mtime 固定（默认 0，可用 SOURCE_DATE_EPOCH 覆盖）：否则每个文件的修改时间都进哈希，
+// 内容完全相同的包每次打出来都不一样，发布包的 sha256 无法用源码复验（审查 M11）。
+const EPOCH = Number(process.env.SOURCE_DATE_EPOCH || 0);
 
 // ---------- 最小 tar 写入器（ustar）----------
 const BLOCK = 512;
@@ -69,8 +84,7 @@ function header(name, size, mtime, mode = 0o644) {
 const parts = [];
 for (const f of files) {
   const data = await readFile(f.full);
-  const st = await stat(f.full);
-  parts.push(header(f.name, data.length, st.mtimeMs), data);
+  parts.push(header(f.name, data.length, EPOCH * 1000), data);
   const pad = (BLOCK - (data.length % BLOCK)) % BLOCK;
   if (pad) parts.push(Buffer.alloc(pad, 0));
 }
@@ -90,4 +104,4 @@ await writeFile(`${versioned}.sha256`, `${digest}  ${versioned.split(/[\\/]/).po
 console.log(`✓ ${relative(ROOT, versioned)}  ${(tarball.length / 1024).toFixed(0)} KB  ${files.length} 个文件`);
 console.log(`  同时写了一份 ${relative(ROOT, base)}`);
 console.log(`  SHA-256: ${digest}`);
-console.log('  包内根目录：theme.json + LICENSE + preview.png + dist/（Monitor 后台 / 主题市场直接装）');
+console.log('  包内根目录：theme.json + LICENSE + THIRD-PARTY-NOTICES.md + preview.png + dist/（Monitor 后台 / 主题市场直接装）');

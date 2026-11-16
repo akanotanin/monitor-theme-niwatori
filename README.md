@@ -16,9 +16,10 @@
 
 ## 安装
 
-需要 **Monitor hub 1.6.0+**。
+需要 **Monitor hub 1.5.2+**（已在 v1.5.2 上实测：`/api/me`、`/api/nodes`、`/api/nodes/{id}/metrics`、
+`/api/themes/<short>/config`、主题安装与 SPA 回退都在这个版本里）。
 
-1. 从 [Releases](https://github.com/akanotanin/monitor-theme-niwatori/releases) 下载 `monitor-theme-niwatori-1.0.15.tar.gz`
+1. 从 [Releases](https://github.com/akanotanin/monitor-theme-niwatori/releases) 下载 `monitor-theme-niwatori-1.0.16.tar.gz`
 2. 后台 → 主题 → 上传 tar.gz
 3. 可选设置：网站鸡、大白鹅/看门狗数量、暴躁鸡阈值、光照、音效
 
@@ -30,7 +31,7 @@
 npm run check      # 静态自检（配置、资源、模型、署名）+ 脱敏自检
 npm run check:leaks # 只跑脱敏自检（读本机 .leaklist，可选；不提交）
 npm run mock       # http://127.0.0.1:18099
-npm run verify     # 需要 Chrome 开着 --remote-debugging-port=9333
+npm run verify     # 需要 Chrome 开着 --remote-debugging-port=9333（Node 22+：脚本用全局 WebSocket）
 npm run package    # release/*.tar.gz
 ```
 
@@ -56,6 +57,6 @@ shots/        截图
 ## 许可
 
 - 主题代码 MIT，见 [LICENSE](LICENSE)；上游 [cyber-probe](https://github.com/akanotanin/cyber-probe) 同为 MIT
-- three.js r169：MIT
-- 国旗：flagcdn（公有领域）
+- three.js r169：MIT（全文在 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)，随发布包分发）
+- 国旗：flagcdn（flagpedia.net）的免费国旗库，上游说明其图像取自 Wikimedia Commons 的公有领域国旗图
 - 精细模型：GLB，CC BY 4.0；完整署名、许可与来源保留在每个文件的 `asset.copyright` / `asset.extras` 中，分发时请勿剥离

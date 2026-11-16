@@ -145,7 +145,18 @@ async function record(name, path, opts, checks) {
       })(),
       title: document.title,
       models: !!(window.CP_THEME && window.CP_THEME.models),
+      // 每只狗必须各自挂着自己的模型（共用同一个缓存 scene 时，后一只 add() 会把前一只的模型
+      // 从它身上摘走 —— 后台把看门狗设成 2 只后，先建的那只只剩名牌，审查 H1）。
+      dogs: p.npcs ? [...p.npcs.values()].filter((n) => n.kind === 'dog')
+        .map((d) => ({
+          model: !!d.chicken?.model,
+          parentIsBody: !!(d.chicken?.model && d.chicken.model.parent === d.chicken.bodyG),
+        })) : [],
+      geese: p.npcs ? [...p.npcs.values()].filter((n) => n.kind === 'goose').length : 0,
       pfModels: window.__pfModels || 0,
+      pfDecor: window.__pfDecor || 0,
+      pfTotal: window.__pfTotal || 0,
+      pfLog: (window.__pfLog || []).length,
     };
   })()`) : { error: 'theme never initialised' };
   const file = await shot(s, name);
@@ -233,12 +244,36 @@ async function main() {
 
   const threeNet = (r) => Array.isArray(r.net) && r.net.length > 0
     && r.net.every((row) => Array.isArray(row) && row.join('/') === '电信/联通/移动');
+
+  // 控制台异常 / 例外 / HTTP>=400 以前只写进 report.json，**不参与最终判定** ——
+  // 任意 .glb、国旗 404，只要主题还能初始化，ok 仍是 true（坏资产能发布，审查 M13）。
+  // 这里把预期内的噪音白名单掉（未登录时 /admin 的 401、图标探测的 404），其余一条都不放过。
+  const EXPECT_HTTP = [/\/admin\b/, /\/favicon/i, /apple-touch-icon/i];
+  const EXPECT_LOG = [/Failed to load resource: the server responded with a status of 40[14]/i];
+  const hunt = (r) => {
+    const pr = r.problems || {};
+    return {
+      name: r.name,
+      http: (pr.http || []).filter((u) => !EXPECT_HTTP.some((re) => re.test(u))),
+      console: (pr.console || []).filter((t) => !EXPECT_LOG.some((re) => re.test(t))),
+      exceptions: pr.exceptions || [],
+    };
+  };
+  const noise = results.map(hunt).filter((x) => x.http.length || x.console.length || x.exceptions.length);
+
   const report = {
     base: BASE,
     farm, farmDay, nodes, detail, mobile, nodesMobile, privateSite,
     checks: results,
+    errors: noise,
     ok: results.every((r) => r.ok !== false)
-      && farm.npcs > 0 && farm.pfModels > 10 && nodes.paused === true && detail.detail === true
+      && noise.length === 0
+      // 模型必须一个不少：__pfModels 是「成功摆上去的数量」，以前只断言 > 10，
+      // 而实际有 29 个模型 × 多处摆放（44 次）—— 24 个 404 也能通过（审查 M13）。
+      && farm.pfTotal > 0 && farm.pfDecor === farm.pfTotal && farm.pfLog === farm.pfTotal
+      // 有模型的狗必须都还挂在自己身上（多狗共用缓存 scene 的回归：第一只只剩名牌）
+      && farm.dogs.every((d) => !d.model || d.parentIsBody)
+      && farm.npcs > 0 && nodes.paused === true && detail.detail === true
       // 三网：一格一个运营商（以前三个任务全是电信时这里会是 电信/电信/电信）
       && threeNet(nodes) && threeNet(nodesMobile)
       // 列表不能横向溢出（长名字卡片曾把手机端卡片挤出面板）

@@ -776,6 +776,36 @@ function buildProp(d, o) {
       }
       break;
     }
+    case 'picnic': {
+      // 野餐桌（自建兜底）：桌面 + 两条长凳 + 斜撑。GLB 拉不到时不能只剩一个空碰撞盒
+      // —— picnic / burro 以前漏了 case，模型 404 时玩家会撞空气（2026-11-17 审查 M8）。
+      d.add('plank', G.box, x, y0 + 0.74, z, null, [1.9, 0.09, 0.86]);
+      for (const dz of [-0.72, 0.72]) {
+        d.add('plank', G.box, x, y0 + 0.44, z + dz, null, [1.9, 0.08, 0.3]);
+        for (const dx of [-0.72, 0.72]) {
+          d.add('plankDark', G.box, x + dx, y0 + 0.22, z + dz, null, [0.09, 0.44, 0.09]);
+        }
+      }
+      for (const dx of [-0.72, 0.72]) {
+        d.add('plankDark', G.box, x + dx, y0 + 0.36, z, [0, 0, 0.16], [0.1, 0.74, 0.8]);
+      }
+      break;
+    }
+    case 'burro': {
+      // 驮货的驴（自建兜底）：身子 + 头 + 四条腿 + 耳朵 + 尾巴 + 草袋
+      d.add('plankDark', G.box, x, y0 + 0.86, z, null, [1.02, 0.48, 0.46]);
+      d.add('plankDark', G.box, x + 0.62, y0 + 1.06, z, [0, 0, -0.2], [0.34, 0.32, 0.3]);        // 头
+      d.add('plankDark', G.box, x + 0.8, y0 + 1.0, z, [0, 0, -0.2], [0.26, 0.2, 0.22]);          // 口鼻
+      for (const dz of [-0.09, 0.09]) {
+        d.add('plankDark', G.box, x + 0.7, y0 + 1.28, z + dz, [0, 0, -0.28], [0.07, 0.2, 0.06]); // 耳朵
+      }
+      for (const dx of [-0.38, 0.38]) for (const dz of [-0.16, 0.16]) {
+        d.add('plankDark', G.box, x + dx, y0 + 0.31, z + dz, null, [0.11, 0.62, 0.11]);
+      }
+      d.add('plankDark', G.box, x - 0.56, y0 + 1.02, z, [0, 0, 0.3], [0.06, 0.34, 0.06]);         // 尾巴
+      d.add('hay', G.box, x - 0.1, y0 + 1.22, z, null, [0.5, 0.28, 0.4]);                        // 驮的草袋
+      break;
+    }
     case 'barrow': {
       // 手推车：斗 + 两个把手 + 一个轮子
       d.add('metal', G.box, x, y0 + 0.5, z, [0, 0, 0.1], [0.95, 0.42, 0.62]);
@@ -1170,6 +1200,9 @@ function buildGrassAndFlowers(scene, rand, boxes = []) {
   const dummy = new THREE.Object3D();
   const c = new THREE.Color();
   const greens = (SEASON_PALETTE[SEASON] || SEASON_PALETTE.summer).grass;
+  // 用一个「实际摆下」的计数器：被 continue 跳过的实例矩阵还是零矩阵，但 InstancedMesh 仍按
+  // count 全量做顶点变换 —— 写进中间的空位既浪费、count 又收不回来（审查 L8）。
+  let placed = 0;
   for (let i = 0; i < N; i++) {
     let gx = (rand() * 2 - 1) * (WORLD_HALF - 1.2);
     let gz = (rand() * 2 - 1) * (WORLD_HALF - 1.2);
@@ -1183,12 +1216,14 @@ function buildGrassAndFlowers(scene, rand, boxes = []) {
     dummy.rotation.set(0, rand() * 3.14, 0);
     dummy.scale.setScalar(0.7 + rand() * 0.95);
     dummy.updateMatrix();
-    blades.setMatrixAt(i, dummy.matrix);
+    blades.setMatrixAt(placed, dummy.matrix);
     c.setHex(greens[Math.floor(rand() * greens.length)]);
-    blades.setColorAt(i, c);
+    blades.setColorAt(placed, c);
+    placed++;
   }
+  blades.count = placed;       // 只画真摆下的那些
   blades.castShadow = false;   // 草叶太小，投影看不出来；关掉省一半阴影绘制
-  blades.instanceColor.needsUpdate = true;
+  if (blades.instanceColor) blades.instanceColor.needsUpdate = true;
   scene.add(blades);
 
   // 野花：小茎 + 花头
@@ -1199,6 +1234,7 @@ function buildGrassAndFlowers(scene, rand, boxes = []) {
   const M = 150;
   const flowers = new THREE.InstancedMesh(flower, new THREE.MeshLambertMaterial({ color: 0xffffff }), M);
   const cols = [0xf7e07a, 0xf3b7c8, 0xc9b6ea, 0xf6f2e4, 0xe8e07a];
+  let fPlaced = 0;
   for (let i = 0; i < M; i++) {
     // 花爱长在围栏边和菜园周围：一半贴边、一半随机
     let fx, fz;
@@ -1216,12 +1252,14 @@ function buildGrassAndFlowers(scene, rand, boxes = []) {
     dummy.rotation.set(0, rand() * 3.14, 0);
     dummy.scale.setScalar(0.7 + rand() * 0.5);
     dummy.updateMatrix();
-    flowers.setMatrixAt(i, dummy.matrix);
+    flowers.setMatrixAt(fPlaced, dummy.matrix);
     c.setHex(cols[Math.floor(rand() * cols.length)]);
-    flowers.setColorAt(i, c);
+    flowers.setColorAt(fPlaced, c);
+    fPlaced++;
   }
+  flowers.count = fPlaced;
   flowers.castShadow = false;
-  flowers.instanceColor.needsUpdate = true;
+  if (flowers.instanceColor) flowers.instanceColor.needsUpdate = true;
   scene.add(flowers);
 }
 
@@ -1322,7 +1360,10 @@ export function buildScene(renderer) {
 
   // 季节：默认按当前月份，?season=spring|summer|autumn|winter 可覆盖（影响作物/草/地色，纯观感）
   const qs = new URLSearchParams(location.search);
-  SEASON = qs.get('season') || seasonOfMonth(new Date().getMonth());
+  // 只认调色板里真有的键：?season=constructor 会从原型上取到函数，setHex(undefined) 把地面涂黑
+  const seasonQ = qs.get('season');
+  SEASON = seasonQ && Object.prototype.hasOwnProperty.call(SEASON_PALETTE, seasonQ)
+    ? seasonQ : seasonOfMonth(new Date().getMonth());
   const sp = SEASON_PALETTE[SEASON] || SEASON_PALETTE.summer;
   MAT.crop.color.setHex(sp.crop);
   MAT.corn.color.setHex(sp.corn);

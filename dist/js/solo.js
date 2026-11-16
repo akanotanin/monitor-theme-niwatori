@@ -12,10 +12,10 @@
 // 数值对齐 server/farm_server.py（PROBE_HP=100、玩家啄 12 / 扇翅 8、暴躁鸡啄 9 / 冷却 2.2s、
 // 大白鹅 60 血 / 啄 6 / 领地 2.5m、看门狗 9 伤害 / 冷却 1.1s 等）。
 
-import { Npc } from './npc.js?v=1.0.15';
+import { Npc } from './npc.js?v=1.0.16';
 import { Goose } from './goose.js';
 import { Dog, DOG } from './dog.js';
-import { CONF } from './data.js?v=1.0.15';
+import { CONF } from './data.js?v=1.0.16';
 import { resolveCollision, BOUNDS, groundHeight } from './world.js';
 
 const THEME = (typeof window !== 'undefined' && window.CP_THEME) || {};
@@ -733,7 +733,10 @@ export class SoloFarm {
     if (p.hp < 100 && performance.now() - this.lastHurt > 5000) {
       p.hp = Math.min(100, p.hp + 5 * dt);
       p.koT = 0;
-      this.playerChicken.setHp(p.hp);
+      // 取整再交给名牌：浮点每帧都在变 → setNamePlate 的 === 比较永远不等 → 每帧重画
+      // 380×170 canvas 并重传 GPU 纹理（回满一次血约 20 秒的每帧上传，审查 M3）。
+      // 取整后一秒只重画十来次，回血条看起来照样是连续的。
+      this.playerChicken.setHp(Math.round(p.hp));
     }
     // HUD 不用每帧写；4Hz 足够让血条看起来是连续的
     this._hudT += dt;

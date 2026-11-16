@@ -4,7 +4,7 @@
 // 顺序很重要：js/data.js 在模块求值时就读 window.CP_OPTIONS（暴躁鸡阈值），
 // 静态 import 会提前求值，所以这里用「await 设置 → 再 dynamic import」。
 //
-// Monitor 主题约定（hub 1.6.0 起）：
+// Monitor 主题约定（hub 1.5.2 起）：
 //   · /api/me 返回 { authed, site_name, public_page, history_days }；
 //   · 主题的 config 表单保存在 /api/themes/<short>/config（一个站一份，GET 读、PUT 写）；
 //   · public_page 关掉且没登录时，hub 对所有公开接口回 401 / 不显示状态页。
@@ -157,7 +157,7 @@ async function start() {
 
   // 主题文件在升级瞬间可能还没全部就位（或 CDN 缓存了短暂 404）：
   // 动态 import 重试 3 次；theme-shell 失败不锁农场，避免「农场没启动」整页报错。
-  const V = '1.0.15';
+  const V = '1.0.16';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   async function load(path, tries = 3) {
     let last;

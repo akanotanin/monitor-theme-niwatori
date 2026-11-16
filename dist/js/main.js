@@ -1,14 +1,14 @@
 // 总装：渲染器、第三人称操控、输入（鼠标/键盘/触屏）、NPC 数据绑定、主循环
 import * as THREE from 'three';
-import { Farm, CONF } from './data.js?v=1.0.15';
+import { Farm, CONF } from './data.js?v=1.0.16';
 import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js';
 import { Chicken } from './chicken.js';
-import { Npc } from './npc.js?v=1.0.15';
+import { Npc } from './npc.js?v=1.0.16';
 import { Goose, GOOSE } from './goose.js';
 import { Dog, DOG } from './dog.js';
-import { Hud } from './hud.js?v=1.0.15';
+import { Hud } from './hud.js?v=1.0.16';
 import { Net } from './net.js';
-import { SoloFarm } from './solo.js?v=1.0.15';
+import { SoloFarm } from './solo.js?v=1.0.16';
 import { Feathers, Dust } from './feathers.js';
 import { Sfx } from './sfx.js';
 import { decorate } from './models.js';
@@ -951,7 +951,22 @@ function separateEntities() {
 // 状态位（与 server/farm_server.py、js/chicken.js 三处必须一致）：DEAD 1 / PECK 2 / RUN 4 / FLAP 8 / PREEN 16
 const ST_FLEE = 32, ST_FIGHT = 64;
 let lastT = performance.now(), hudT = 0, peckCd = 0, wingCd = 0, netT = 0;
+let tickErrAt = 0;
+/** 主循环的异常边界：tickBody 末尾才 requestAnimationFrame，**一次异常就永久停帧**
+ *  （3D 不动 + HUD 不再刷新，用户只看到一屏死画面）。坏数据/单帧计算错误兜住就行，
+ *  限流打日志、继续下一帧，别让整页陪葬（2026-11-17 审查 M2）。 */
 function tick(now) {
+  try {
+    tickBody(now);
+  } catch (e) {
+    if (now - tickErrAt > 5000) {
+      tickErrAt = now;
+      console.error('[farm] 一帧出错（已跳过，继续运行）：', e);
+    }
+    requestAnimationFrame(tick);
+  }
+}
+function tickBody(now) {
   // 路由切到 /nodes 时停掉 3D 这一帧（数据轮询在 Farm 自己的定时器里，不受影响）。
   // 不暂停的话，列表页背后还在跑满帧渲染，手机发热/耗电都白花。
   if (paused) { lastT = now; requestAnimationFrame(tick); return; }

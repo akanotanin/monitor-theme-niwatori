@@ -6,7 +6,8 @@ import * as CFG from './config.js';
 import * as Komari from './komari.js';
 import * as Nezha from './nezha.js';
 
-const API = new URL('./api/', document.baseURI.replace(/[^/]*$/, ''))   // index.html 直开也要落到它的目录，不是 index.html/api/.href;
+// index.html 直开（file:// 或 /themes/x/dist/）也要落到它所在的目录，不是 index.html/api/
+const API = new URL('./api/', document.baseURI.replace(/[^/]*$/, '')).href;
 
 // 站点玩法选项（js/site-options.js 由一键安装器写入；没有就用下面这套默认值）
 const OPT = (typeof window !== 'undefined' && window.CP_OPTIONS) || {};
@@ -89,26 +90,93 @@ export function shortCpu(name) {
 
 // ---- 数据源 ----
 // signal 用来在「页面切到后台」时把在途请求一并丢弃（hub 1.4.0 起的推荐做法）。
-async function getJSON(path, signal) {
-  const r = await fetch(API + path, { headers: { accept: 'application/json' }, signal });
-  // 错误会显示在公开页面上：把 uuid 查询值脱敏，别把节点 UUID 带进 UI。
-  const safePath = path.replace(/([?&]uuid=)[^&]*/gi, '$1…');
-  if (!r.ok) {
-    // 带上状态码：上层要按 429（站点限流）做一次退避重试，而不是直接弹「读取失败」。
-    const err = new Error(`${safePath} → HTTP ${r.status}`);
-    err.status = r.status;
-    throw err;
+//
+// ★ 每个请求都必须有超时：只挂 AbortSignal 的话，遇到「连接建好了但永不回包」的反代/CF 节点，
+//   fetch 可以挂几分钟 —— refreshNodes 的单飞标志永远不复位，轮询从此停摆，页面看着像死了
+//   （2026-11-17 审查 H2）。超时中断和「切后台」的中断要分开：前者要报错，后者必须静默。
+const FETCH_TIMEOUT = 8000;
+/** 浏览器时钟 - 服务器时钟（秒）。优先用响应的 HTTP Date 头，比「最新样本≈现在」可靠得多。 */
+let SERVER_SKEW = null;
+
+function timeoutSignal(outer, ms) {
+  const outers = (Array.isArray(outer) ? outer : [outer]).filter(Boolean);
+  const ctrl = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, ms);
+  const onAbort = () => ctrl.abort();
+  for (const s of outers) {
+    if (s.aborted) { ctrl.abort(); break; }
+    s.addEventListener('abort', onAbort, { once: true });
   }
-  const d = await r.json();
-  // Komari 的错误也可能是 HTTP 200 + {status:"error"}（例如私有站点模式），别当成数据往下传。
-  if (CONF.source === 'komari' && d && typeof d === 'object' && d.status === 'error') {
-    throw new Error(d.message || `${safePath} → Komari error`);
-  }
-  return d;
+  return {
+    signal: ctrl.signal,
+    timedOut: () => timedOut,
+    clear() { clearTimeout(timer); for (const s of outers) s.removeEventListener?.('abort', onAbort); },
+  };
 }
+
+/** signal 可以是单个，也可以是数组（详情请求要同时被「切后台」和「换档/关面板」取消）。 */
+async function getJSON(path, signal, timeout = FETCH_TIMEOUT) {
+  const t = timeoutSignal(signal, timeout);
+  try {
+    // 错误会显示在公开页面上：把 uuid 查询值脱敏，别把节点 UUID 带进 UI。
+    const safePath = path.replace(/([?&]uuid=)[^&]*/gi, '$1…');
+    let r;
+    try {
+      r = await fetch(API + path, { headers: { accept: 'application/json' }, signal: t.signal });
+    } catch (e) {
+      // 超时也表现为 AbortError；转成普通错误，上层才不会当成「切后台」静默吞掉。
+      const outerAborted = (Array.isArray(signal) ? signal : [signal]).some((s) => s && s.aborted);
+      if (t.timedOut() && !outerAborted) throw new Error(`${safePath} → 读取超时（${msText(timeout)}）`);
+      throw e;
+    }
+    // 响应头里的 Date 就是服务器时钟（秒级）：用它估计时钟差，比拿样本时间戳猜准确。
+    const dh = r.headers.get('date');
+    if (dh) {
+      const srv = Date.parse(dh);
+      if (Number.isFinite(srv)) {
+        const sk = (Date.now() - srv) / 1000;
+        if (Math.abs(sk) < 86400) SERVER_SKEW = sk;      // 大于一天的估计肯定是坏头，不用
+      }
+    }
+    if (!r.ok) {
+      // 带上状态码：上层要按 429（站点限流）做一次退避重试，而不是直接弹「读取失败」。
+      const err = new Error(`${safePath} → HTTP ${r.status}`);
+      err.status = r.status;
+      throw err;
+    }
+    const d = await r.json();
+    // Komari 的错误也可能是 HTTP 200 + {status:"error"}（例如私有站点模式），别当成数据往下传。
+    if (CONF.source === 'komari' && d && typeof d === 'object' && d.status === 'error') {
+      throw new Error(d.message || `${safePath} → Komari error`);
+    }
+    return d;
+  } finally {
+    t.clear();
+  }
+}
+const msText = (v) => `${(v / 1000).toFixed(v % 1000 ? 1 : 0)}s`;
 /** 切后台时被打断的请求会抛 AbortError —— 那不是数据错误，别显示成「探针数据读取失败」。 */
 const isAbort = (e) => !!e && (e.name === 'AbortError' || /abort/i.test(String(e.message || '')));
 const abortErr = () => { const e = new Error('paused'); e.name = 'AbortError'; return e; };
+
+/** metrics 里必须是数字的字段（npc / hud / solo 直接拿去做算术和 toFixed）。
+ *  不是有限非负数的就删掉 —— 让下游走 `?? '—'` 的空值分支，而不是把字符串塞进 toFixed。 */
+const METRIC_NUMS = ['cpu', 'mem_used', 'mem_total', 'swap_used', 'swap_total', 'disk_used', 'disk_total',
+  'net_rx', 'net_tx', 'uptime', 'procs', 'tcp', 'udp', 'threads', 'gpu_used'];
+function sanitizeMetrics(src) {
+  const out = { ...src };
+  for (const k of METRIC_NUMS) {
+    if (!(k in out)) continue;
+    const n = Number(out[k]);
+    if (Number.isFinite(n) && n >= 0) out[k] = n; else delete out[k];
+  }
+  if ('load' in out) {
+    const load = Array.isArray(out.load) ? out.load.map(Number).filter((x) => Number.isFinite(x) && x >= 0) : [];
+    if (load.length) out.load = load; else delete out.load;
+  }
+  return out;
+}
 
 export class Farm {
   constructor() {
@@ -127,6 +195,7 @@ export class Farm {
     this.detailCache = new Map(); // `${nodeId}:${hours}:${points}` -> {t, data}
     this._rr = 0;
     this._pingSkew = 0;           // 浏览器时钟 - hub 服务器时钟（秒）；避免访客时钟偏快把样本全判过期
+    this._pingSkewSet = false;    // 是否已经有过一个兜底估计（0 也算有效值）
     // 保留天数：monitor 由 /api/me 的 history_days 给出；Komari 先读 config.js 的
     // HISTORY_DAYS（安装时按 /api/public 的 record_preserve_time 写好），运行时再刷新。
     const cfgDays = Number(CFG.HISTORY_DAYS);
@@ -138,6 +207,9 @@ export class Farm {
     this._abort = null;           // 在途请求的取消器（切后台时 abort）
     this._paused = false;         // 页面在后台 → 轮询停着
     this._nodesBusy = false;      // 节点刷新单飞：慢请求不叠加
+    this._nodesStartedAt = 0;     // 本轮开始时刻（卡死兜底用）
+    this._nodesGen = 0;           // 轮次序号（只有本轮的 finally 能解锁）
+    this._pingBusy = false;       // ping 轮询单飞
     this._retry429 = false;       // 本轮已经为 429（站点限流）重试过一次
     this._vis = null;             // visibilitychange 监听器引用
     // ---- Komari 专用状态（monitor 模式下这些字段不参与任何逻辑）----
@@ -509,9 +581,15 @@ export class Farm {
   }
 
   async refreshNodes() {
-    if (this._paused || this._nodesBusy) return;  // 后台窗口 / 上一轮还没跑完：不叠加请求
+    // 单飞：上一轮还没跑完不叠加请求。★但必须有兜底 —— 万一某个 await 永远不返回（反代挂住、
+    //   浏览器扩展吞掉请求），_nodesBusy 会永远为 true，之后每轮刷新全部早退、页面静静停更。
+    //   超过 30 秒就当成卡死，放行新一轮（2026-11-17 审查 H2）。
+    if (this._nodesBusy && now() - (this._nodesStartedAt || 0) < 30000) return;
+    if (this._paused) return;
+    this._nodesStartedAt = now();
     if (CONF.source === 'nezha') this._checkNezhaStale();
     this._nodesBusy = true;
+    const gen = (this._nodesGen = (this._nodesGen || 0) + 1);
     try {
       let recentStats = null;
       if (CONF.source === 'nezha') {
@@ -551,7 +629,11 @@ export class Farm {
         // 一个 null/非对象条目会让 _pruneNodeState / onlineCount / HUD 抛异常，
         // 而 main.js 的 tick 没有 try/catch → 一次坏响应就永久停掉整个 3D 循环。
         const raw = Array.isArray(d) ? d : (d && Array.isArray(d.nodes) ? d.nodes : []);
-        this.nodes = raw.filter((n) => n && typeof n === 'object');
+        // metrics 也做数值净化：ping 那条链路已经净化过（字符串延迟会让 avg 变成字符串拼接），
+        // 节点 metrics 却一直原样透传 —— 一旦 hub 字段退化（字符串/NaN），npc.js 的
+        // (m.load[0]).toFixed(2) 会抛错，而 main.js 的 tick 一次异常就永久停掉整个循环。
+        this.nodes = raw.filter((n) => n && typeof n === 'object')
+          .map((n) => (n.metrics && typeof n.metrics === 'object' ? { ...n, metrics: sanitizeMetrics(n.metrics) } : n));
         this._pruneNodeState();
       }
       this.lastOk = now();
@@ -581,18 +663,21 @@ export class Farm {
       this.error = CONF.source === 'nezha' ? this._friendlyNezhaError(e) : String(e.message || e);
       this._emit();
     } finally {
-      this._nodesBusy = false;
+      // 只有本轮的 finally 能解锁：上一轮卡死被放行后回得晚，不许把新一轮的单飞标志提前清掉
+      if (this._nodesGen === gen) this._nodesBusy = false;
     }
   }
 
   // 每 4 秒轮一个节点，取它最近 1 小时的 ping 记录（1 分钟一个桶，够新才敢当"当前值"）
   async refreshPing() {
-    if (this._paused) return;
+    // 单飞：4 秒一轮，单台最多 8 秒 —— 卡住的请求不许在定时器上越叠越多（审查 H2）。
+    if (this._paused || this._pingBusy) return;
     // 哪吒没有「每节点最近一段 ping」的轻量接口：网站鸡用服务级统计，
     // 每节点延迟只在打开详情时按需查（游客 1d）。这里不发请求。
     if (CONF.source === 'nezha') return;
     if (!this.nodes.length) return;
     const n = this.nodes[this._rr++ % this.nodes.length];
+    this._pingBusy = true;
     try {
       await this._fetchPing(n);
       this.lastOk = now();
@@ -603,6 +688,8 @@ export class Farm {
       if (isAbort(e)) return;
       this.error = String(e.message || e);
       this._emit();
+    } finally {
+      this._pingBusy = false;
     }
   }
 
@@ -695,17 +782,25 @@ export class Farm {
     return m;
   }
 
-  /** 把服务器时间戳归一到浏览器时钟：p.ts 是 hub/Komari 的时钟，直接和 Date.now 比会受访客时钟偏差影响。 */
+  /** 把服务器时间戳归一到浏览器时钟：p.ts 是 hub/Komari 的时钟，直接和 Date.now 比会受访客时钟偏差影响。
+   *  优先用响应的 HTTP Date 头（getJSON 里记的 SERVER_SKEW），拿不到才退回 ping 样本估计。 */
   _age(ts) {
-    return now() - (Number(ts) + this._pingSkew);
+    return now() - (Number(ts) + (SERVER_SKEW != null ? SERVER_SKEW : this._pingSkew));
   }
+  /** 兜底估计（没有 Date 头时才用）。
+   *  「最新样本 ≈ 现在」这个假设只在节点刚上报时成立：断报 30 分钟的节点会把单次估计推大 1800s，
+   *  而 S+A ≥ S，所以真实偏移是这些估计的**下界** —— 取最小值，别用最后一次
+   *  （用大了会让一小时前的样本算成「刚刚」，网络榜/网站鸡把旧数据当当前值，2026-11-17 审查 M1）。 */
   _updatePingSkew(m) {
     let newest = 0;
     for (const v of m.values()) {
       const t = Number(v.ts);
       if (Number.isFinite(t) && t > newest) newest = t;
     }
-    if (newest > 0) this._pingSkew = now() - newest;
+    if (!newest) return;
+    const est = now() - newest;
+    this._pingSkew = this._pingSkewSet ? Math.min(this._pingSkew, est) : est;
+    this._pingSkewSet = true;
   }
 
   /** 网络榜的曲线：顺手记一条"这台节点此刻的平均延迟"。 */
@@ -873,8 +968,10 @@ export class Farm {
   netRowById(id) { return this.netRank.find((r) => r.node.id === id) || null; }
 
   // ---- 详情：抓某节点历史（资源 + ping），按「节点+窗口+点数」缓存 60s ----
-  async nodeDetail(id, { hours = 24, points = 180, force = false } = {}) {
+  async nodeDetail(id, { hours = 24, points = 180, force = false, signal = null } = {}) {
     if (CONF.source === 'nezha') return this._nezhaNodeDetail(id, { hours, points, force });
+    // 详情请求要能被两种事件取消：切后台（this._abort）和换档/关面板/换节点（调用方的 signal）。
+    const sig = signal ? [this._abort?.signal, signal] : this._abort?.signal;
     // 窗口不能超过 hub 的保留天数（1.3.2 起匿名上限就是它，超了会被拒/截断）；history_days 是「天」
     hours = Math.max(1, Math.min(Math.round(hours), Math.round(this.historyDays) * 24));
     if (CONF.source === 'komari') hours = Math.min(hours, 168);   // 与 ranges() 的 7 天封顶一致
@@ -889,10 +986,9 @@ export class Farm {
       // 资源和 ping 各一次；ping 的 max_count 按图表点数放大（服务端会按任务等比采样，
       // 统计值仍按全量记录算）。历史窗口已经按 historyDays 夹过，不会越界。
       const cap = Math.max(120, Math.min(4000, Math.round(points) * 8));
-      const signal = this._abort?.signal;
       const [load, ping] = await Promise.all([
-        getJSON(`records/load?uuid=${q}&load_type=all&hours=${hours}`, signal),
-        getJSON(`records/ping?uuid=${q}&hours=${hours}&max_count=${cap}`, signal),
+        getJSON(`records/load?uuid=${q}&load_type=all&hours=${hours}`, sig),
+        getJSON(`records/ping?uuid=${q}&hours=${hours}&max_count=${cap}`, sig),
       ]);
       d = Komari.mapDetail(Komari.unwrap(load), Komari.unwrap(ping));
     } else {
@@ -900,7 +996,7 @@ export class Farm {
       // 详情页一次要拉多台，没有退避时被拒的那几台会静默少线（子代理审查指出）。
       for (let attempt = 0; ; attempt++) {
         try {
-          d = await getJSON(`nodes/${id}/metrics?hours=${hours}&points=${points}`, this._abort?.signal);
+          d = await getJSON(`nodes/${id}/metrics?hours=${hours}&points=${points}`, sig);
           break;
         } catch (e) {
           if (attempt >= 2 || !/HTTP (429|503)/.test(String(e && e.message))) throw e;

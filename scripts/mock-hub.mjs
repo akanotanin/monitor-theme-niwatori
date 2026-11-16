@@ -27,6 +27,11 @@ const MOCK_429 = Number(arg('429', process.env.MOCK_429 || 0));   // 前 n 次 /
 let hits429 = 0;
 const THEME_SKY = arg('sky', 'auto');             // auto | day | dusk
 const THEME_SOUND = arg('sound', 'on') !== 'off';
+const THEME_DOGS = Number(arg('dogs', 1));        // 看门狗数量（≥2 用来验「多只狗共用同一个 GLB」的回归）
+const SLOW_MS = Number(arg('slow', 0));           // /api/nodes 延迟多少毫秒回（验主题的请求超时）
+const SLOW_TIMES = Number(arg('slow-times', 1));  // 前几次慢（默认只慢第一次：用来验「超时后能自恢复」）
+let slowHits = 0;
+const THEME_GEESE = Number(arg('geese', 2));
 const ROOT = new URL('../dist/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 
 const MIME = {
@@ -206,8 +211,8 @@ function api(req, res, pathname, query) {
   if (pathname === '/api/themes/niwatori/config') {
     return json(res, {
       showWeb: true,
-      geese: 2,
-      dogs: 1,
+      geese: THEME_GEESE,
+      dogs: THEME_DOGS,
       hotCpu: 55,
       hotMem: 85,
       hotMax: 0,
@@ -217,6 +222,11 @@ function api(req, res, pathname, query) {
   }
   if (pathname === '/api/nodes') {
     if (CLOSED) return json(res, { error: 'unauthorized' }, 401);
+    // 慢响应：模拟「连接建好但迟迟不回包」的反代。主题必须在 8 秒后自己超时，然后还能恢复轮询。
+    if (SLOW_MS > 0 && slowHits < SLOW_TIMES) {
+      slowHits++;
+      return void setTimeout(() => json(res, { nodes: NODES.map(nodeView) }), SLOW_MS);
+    }
     // MOCK_429=n：前 n 次 /api/nodes 回 429，用来验证主题在站点限流时的退避重试
     if (MOCK_429 && hits429 < MOCK_429) { hits429++; return json(res, { error: 'rate limited' }, 429); }
     return json(res, { nodes: NODES.map(nodeView) });

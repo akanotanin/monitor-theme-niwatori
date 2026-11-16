@@ -263,6 +263,8 @@ export class Chicken {
   }
 
   setHp(hp) {
+    // 名牌只画整数血条：浮点会让 === 永远不等，每帧重绘 canvas + 重传纹理
+    hp = Math.round(hp);
     if (hp === this.hp) return;
     this.hp = hp;
     this.drawPlate();
