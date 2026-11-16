@@ -93,7 +93,12 @@ async function getJSON(path, signal) {
   const r = await fetch(API + path, { headers: { accept: 'application/json' }, signal });
   // 错误会显示在公开页面上：把 uuid 查询值脱敏，别把节点 UUID 带进 UI。
   const safePath = path.replace(/([?&]uuid=)[^&]*/gi, '$1…');
-  if (!r.ok) throw new Error(`${safePath} → HTTP ${r.status}`);
+  if (!r.ok) {
+    // 带上状态码：上层要按 429（站点限流）做一次退避重试，而不是直接弹「读取失败」。
+    const err = new Error(`${safePath} → HTTP ${r.status}`);
+    err.status = r.status;
+    throw err;
+  }
   const d = await r.json();
   // Komari 的错误也可能是 HTTP 200 + {status:"error"}（例如私有站点模式），别当成数据往下传。
   if (CONF.source === 'komari' && d && typeof d === 'object' && d.status === 'error') {
@@ -133,6 +138,7 @@ export class Farm {
     this._abort = null;           // 在途请求的取消器（切后台时 abort）
     this._paused = false;         // 页面在后台 → 轮询停着
     this._nodesBusy = false;      // 节点刷新单飞：慢请求不叠加
+    this._retry429 = false;       // 本轮已经为 429（站点限流）重试过一次
     this._vis = null;             // visibilitychange 监听器引用
     // ---- Komari 专用状态（monitor 模式下这些字段不参与任何逻辑）----
     this._uuidIds = new Map();    // uuid -> 数字 id（前端/联机服都按数字 id 认鸡）
@@ -558,9 +564,20 @@ export class Farm {
         this.error = (recentStats && recentStats.fail > 0 && recentStats.ok === 0 && !this._liveConnected)
           ? 'Komari /api/recent 读取失败' : null;
       }
+      this._retry429 = false;          // 成功一次就把 429 的重试额度还回来
       this._emit();
     } catch (e) {
       if (isAbort(e)) return;
+      // 站点限流（nginx 的 limit_req、CF 规则都会回 429）：隔 1.2 秒重试一次，
+      // 别让首屏直接弹「探针数据读取失败」。只在本轮还没重试过时试 —— 真被限死时
+      // 不许变成 1.2s 一次的轮询，成功一次后再把标记放开。
+      if (e.status === 429 && !this._retry429) {
+        this._retry429 = true;
+        this.error = null;
+        this._emit();
+        setTimeout(() => { if (!this._paused) this.refreshNodes(); }, 1200);
+        return;
+      }
       this.error = CONF.source === 'nezha' ? this._friendlyNezhaError(e) : String(e.message || e);
       this._emit();
     } finally {
@@ -599,7 +616,8 @@ export class Farm {
         d = await getJSON(`nodes/${n.id}/metrics?hours=1&points=60&series=ping`, this._abort?.signal);
         break;
       } catch (e) {
-        if (attempt >= 1 || !/HTTP 503/.test(String(e && e.message))) throw e;
+        // 503 = hub 历史查询并发上限；429 = 站点限流（nginx limit_req / CF 规则）。两种都退避一次。
+        if (attempt >= 1 || !/HTTP (429|503)/.test(String(e && e.message))) throw e;
         await new Promise((r) => setTimeout(r, 800));
         if (this._paused) throw abortErr();
       }
@@ -885,7 +903,7 @@ export class Farm {
           d = await getJSON(`nodes/${id}/metrics?hours=${hours}&points=${points}`, this._abort?.signal);
           break;
         } catch (e) {
-          if (attempt >= 2 || !/HTTP 503/.test(String(e && e.message))) throw e;
+          if (attempt >= 2 || !/HTTP (429|503)/.test(String(e && e.message))) throw e;
           await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
           if (this._paused) throw abortErr();
         }

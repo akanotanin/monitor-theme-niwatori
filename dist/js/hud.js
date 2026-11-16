@@ -1,5 +1,5 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
-import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.13';
+import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.14';
 import { PROBES } from './config.js';
 import { GOOSE } from './goose.js';
 import { DOG } from './dog.js';

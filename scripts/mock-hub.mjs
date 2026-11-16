@@ -23,6 +23,8 @@ const arg = (name, def) => {
 };
 const PORT = Number(arg('port', process.env.PORT || 18099));
 const CLOSED = args.includes('--closed');
+const MOCK_429 = Number(arg('429', process.env.MOCK_429 || 0));   // 前 n 次 /api/nodes 回 429
+let hits429 = 0;
 const THEME_SKY = arg('sky', 'auto');             // auto | day | dusk
 const THEME_SOUND = arg('sound', 'on') !== 'off';
 const ROOT = new URL('../dist/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
@@ -215,6 +217,8 @@ function api(req, res, pathname, query) {
   }
   if (pathname === '/api/nodes') {
     if (CLOSED) return json(res, { error: 'unauthorized' }, 401);
+    // MOCK_429=n：前 n 次 /api/nodes 回 429，用来验证主题在站点限流时的退避重试
+    if (MOCK_429 && hits429 < MOCK_429) { hits429++; return json(res, { error: 'rate limited' }, 429); }
     return json(res, { nodes: NODES.map(nodeView) });
   }
   const m = pathname.match(/^\/api\/nodes\/(\d+)\/metrics$/);
