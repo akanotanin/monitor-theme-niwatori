@@ -263,8 +263,9 @@ export class Chicken {
   }
 
   setHp(hp) {
-    // 名牌只画整数血条：浮点会让 === 永远不等，每帧重绘 canvas + 重传纹理
-    hp = Math.round(hp);
+    // 名牌只画整数血条：浮点会让 === 永远不等，每帧重绘 canvas + 重传纹理。
+    // 但 (0,0.5) 的血要进位到 1 —— 否则鸡活着、血条却是空的（0.4 血的情况真实存在）。
+    hp = hp > 0 ? Math.max(1, Math.round(hp)) : 0;
     if (hp === this.hp) return;
     this.hp = hp;
     this.drawPlate();

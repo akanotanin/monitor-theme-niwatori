@@ -159,37 +159,86 @@ for (const f of REQUIRED_JS) {
 if (!existsSync(join(DIST, 'vendor/three.module.js'))) err('dist/vendor/three.module.js 不存在（3D 引擎）');
 else ok('3D 引擎与主题模块齐全');
 
-// ---------- 模块图闭包 + 语法检查（2026-11-17 加）----------
-// 以前这里只核对 REQUIRED_JS 里的 13 个文件名：删掉 glb-models.js（models.js 静态 import 它）、
-// 删一个 addon、改模块名、importmap 指错路径、给模块写进语法错误 —— check 全部 exit=0，
-// 而这些正是最常见的坏包形态（审查 M12）。现在从 index.html 的入口把整张模块图走一遍，
-// 再对每个自研模块跑 node --check。
+// ---------- 模块图闭包 + 语法检查（2026-11-17 加，同日二轮加固）----------
+// 以前只核对 REQUIRED_JS 里的 13 个文件名：删模块、删 addon、改 importmap、写语法错都 exit=0。
+// 现在从 index.html 的入口把整张模块图走一遍（importmap 以 index.html 里那份 JSON 为唯一真源），
+// 对每个自研模块跑 node --check，并要求所有相对 import 都带 ?v=<当前版本>。
 const moduleFiles = [];
 {
-  const IMPORTMAP = { three: 'vendor/three.module.js', 'three/addons/': 'vendor/addons/' };
+  // importmap 的真源是 index.html。以前用脚本里硬编码的副本，index.html 写错路径查不出来。
+  let MAP = null;
+  const im = index.match(/<script[^>]+type="importmap"[^>]*>([\s\S]*?)<\/script>/i);
+  if (!im) err('dist/index.html 缺 <script type="importmap">（three 的解析表）');
+  else {
+    try {
+      const json = JSON.parse(im[1]);
+      MAP = json && json.imports && typeof json.imports === 'object' ? json.imports : null;
+      if (!MAP) err('dist/index.html 的 importmap 缺 imports 字段');
+    } catch (e) {
+      err(`dist/index.html 的 importmap 不是合法 JSON：${e.message}`);
+    }
+  }
+  MAP = MAP || {};
+
+  const cleanRel = (p) => String(p).replace(/^\.\//, '').split(/[?#]/)[0];
+  const resolveSpec = (spec, from) => {
+    const s = spec.split(/[?#]/)[0];
+    if (s.startsWith('./') || s.startsWith('../')) return relative(DIST, join(DIST, dirname(from), s));
+    if (MAP[s]) return cleanRel(MAP[s]);
+    for (const [k, v] of Object.entries(MAP)) {
+      if (k.endsWith('/') && s.startsWith(k)) return cleanRel(v + s.slice(k.length));
+    }
+    return null;
+  };
+  // 注释里出现的旧路径不该让自检失败：扫描前先按「字符串/注释」状态机剥掉注释。
+  // ⚠ 不能用简单的 /\/\*[\s\S]*?\*\// ：注释里出现 /api/* 这种片段会把它当成块注释起点，
+  //   一直吞到文件里下一个 */ —— 那样整张模块图会静默少掉模块（本次自测就吞掉了 komari/nezha）。
+  const stripComments = (src) => {
+    let out = '';
+    let i = 0;
+    let state = null;                    // 'line' | 'block' | 'sq' | 'dq' | 'tpl'
+    while (i < src.length) {
+      const c = src[i];
+      const d = src[i + 1];
+      if (state === 'line') { if (c === '\n') { state = null; out += c; } i++; continue; }
+      if (state === 'block') { if (c === '*' && d === '/') { state = null; i += 2; } else i++; continue; }
+      if (state) {
+        out += c;
+        if (c === '\\') { out += d || ''; i += 2; continue; }
+        if ((state === 'sq' && c === "'") || (state === 'dq' && c === '"') || (state === 'tpl' && c === '`')) state = null;
+        i++; continue;
+      }
+      if (c === '/' && d === '/') { state = 'line'; i += 2; continue; }
+      if (c === '/' && d === '*') { state = 'block'; i += 2; continue; }
+      if (c === "'" || c === '"' || c === '`') { state = c === "'" ? 'sq' : (c === '"' ? 'dq' : 'tpl'); out += c; i++; continue; }
+      out += c; i++;
+    }
+    return out;
+  };
+  const SPEC_RE = /(?:^|[^\w$.])(?:import|export)\s+(?:[^'"\n]*?\sfrom\s*)?['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]/g;
+  const specsOf = (src) => {
+    const out = [];
+    let m;
+    SPEC_RE.lastIndex = 0;
+    while ((m = SPEC_RE.exec(src))) out.push(m[1] || m[2]);
+    return out;
+  };
+
   const seen = new Set();
   const missing = [];
   const badSpec = [];
+  const noVer = [];
   const queue = [];
   const push = (rel) => { if (rel && !seen.has(rel)) queue.push(rel); };
 
   // 入口 1：index.html 里的本地 <script src>
   for (const m of index.matchAll(/<script[^>]+src="([^"]+)"/g)) {
-    const ref = m[1].split(/[?#]/)[0].replace(/^\.\//, '');
+    const ref = cleanRel(m[1].replace(/^\.\//, ''));
     if (ref && !ref.startsWith('http') && !ref.startsWith('/')) push(ref);
   }
-  // 入口 2：importmap 的目标
-  for (const v of Object.values(IMPORTMAP)) if (!existsSync(join(DIST, v))) missing.push(v);
-  // 入口 3：theme-boot 动态 import 的模块（字符串不在静态 import 里也能被扫到）
-  for (const m of index.matchAll(/import\s*\(\s*['"]\.?\/?([^'"?]+\.js)/g)) push(m[1]);
-
-  const resolveRef = (spec, from) => {
-    const s = spec.split(/[?#]/)[0];
-    if (s.startsWith('./') || s.startsWith('../')) return relative(DIST, join(DIST, dirname(from), s));
-    if (IMPORTMAP[s]) return IMPORTMAP[s];
-    for (const [k, v] of Object.entries(IMPORTMAP)) if (k.endsWith('/') && s.startsWith(k)) return v + s.slice(k.length);
-    return null;
-  };
+  // 入口 2：theme-boot 这类「字符串传进 load()/import()」的动态入口 —— 这些是必需项，
+  // 写错一个字母就必须报错（以前只在文件存在时展开，写错会静默丢整张图）。
+  for (const m of index.matchAll(/['"](\.{1,2}\/[\w./-]+\.js)(?:\?[^'"]*)?['"]/g)) push(cleanRel(m[1]));
 
   while (queue.length) {
     const rel = queue.shift();
@@ -199,39 +248,45 @@ const moduleFiles = [];
     if (!existsSync(full)) { missing.push(rel); continue; }
     if (rel.startsWith('vendor/')) continue;        // vendored（three/addons）只看在不在，不解析内部
     moduleFiles.push(rel);
-    const src = await readFile(full, 'utf8');
-    const re = /(?:^|[^\w$.])(?:import|export)\s+(?:[^'"]*?\sfrom\s*)?['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]/g;
-    let m;
-    while ((m = re.exec(src))) {
-      const spec = m[1] || m[2];
-      if (!spec || /^(data:|https?:)/.test(spec)) continue;
-      const to = resolveRef(spec, rel);
+    const raw = await readFile(full, 'utf8');
+    const src = stripComments(raw);
+    // 必需入口：load('./main.js') / import('./x.js') 里的相对字面量
+    for (const m of src.matchAll(/(?:\bload|\bimport)\s*\(\s*['"](\.{1,2}\/[\w./-]+\.js)(?:\?[^'"]*)?['"]\s*[,)]/g)) {
+      const to = resolveSpec(m[1], rel);
+      if (!to) { badSpec.push(`${rel} → ${m[1]}`); continue; }
+      if (!existsSync(join(DIST, to))) missing.push(`${to}（被 ${rel} 的 load()/import() 引用）`);
+      else push(to);
+    }
+    for (const spec of specsOf(src)) {
+      if (!spec || /^(data:|https?:|node:)/.test(spec)) continue;
+      if (spec.startsWith('./') || spec.startsWith('../')) {
+        if (!/[?&]v=/.test(spec)) noVer.push(`${rel} → ${spec}`);   // 升级后新旧模块混跑
+      }
+      const to = resolveSpec(spec, rel);
       if (!to) { badSpec.push(`${rel} → ${spec}`); continue; }
       if (!existsSync(join(DIST, to))) missing.push(`${to}（被 ${rel} 引用）`);
       else push(to);
     }
-    // 还有一类 import 是拼出来的（theme-boot 的 `load('./main.js')` → import(`${path}?v=`))：
-    // 把源码里出现的相对 .js 字符串字面量也当成入口展开。不存在的只忽略 —— 注释里也可能写路径。
-    for (const m of src.matchAll(/['"](\.{1,2}\/[\w./-]+\.js)(?:\?[^'"]*)?['"]/g)) {
-      const to = resolveRef(m[1], rel);
-      if (to && existsSync(join(DIST, to))) push(to);
-    }
   }
   if (missing.length) err(`模块图缺文件：${[...new Set(missing)].slice(0, 6).join('、')}${missing.length > 6 ? ' …' : ''}`);
-  if (badSpec.length) err(`模块图里有解析不了的 import（既不是相对路径也不是 importmap）：${badSpec.slice(0, 4).join('、')}`);
+  if (badSpec.length) err(`模块图里有解析不了的 import（既不是相对路径也不在 importmap 里）：${badSpec.slice(0, 4).join('、')}`);
+  if (noVer.length) err(`相对 import 缺 ?v=${manifest?.version}（升级后浏览器会混用新旧模块）：${[...new Set(noVer)].slice(0, 6).join('、')}`);
 
-  // 语法检查：ESM 语法错（多写/少写括号、注释吞掉语句）在浏览器里就是整页白屏
+  // 语法检查：用 --experimental-default-type=module 明确按 ESM 解析
+  // （否则 package.json 丢了 "type":"module" 时 node --check 会把 ESM 当 CJS，整道闸门静默失效）
   const syn = [];
   for (const rel of moduleFiles) {
     try {
-      execFileSync(process.execPath, ['--check', join(DIST, rel)], { stdio: 'pipe' });
+      execFileSync(process.execPath, ['--experimental-default-type=module', '--check', join(DIST, rel)], { stdio: 'pipe' });
     } catch (e) {
       const line = String(e.stderr || e.message || '').split('\n').find((l) => /Error|error/.test(l)) || '语法错误';
       syn.push(`${rel}：${line.trim().slice(0, 120)}`);
     }
   }
   if (syn.length) err(`node --check 失败：\n    ${syn.join('\n    ')}`);
-  if (!missing.length && !badSpec.length && !syn.length) ok(`模块图 ${moduleFiles.length} 个模块、语法检查全部通过`);
+  if (!missing.length && !badSpec.length && !noVer.length && !syn.length) {
+    ok(`模块图 ${moduleFiles.length} 个模块、语法检查与 ?v= 全部通过`);
+  }
 }
 // ---------- 国旗：按清单集合比对 ----------
 // 只数数量的话，删掉 cn.png 还剩 249 面 ≥ 240，检查照样通过（审查 M12）。

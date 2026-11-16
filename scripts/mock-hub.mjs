@@ -15,6 +15,7 @@
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2);
 const arg = (name, def) => {
@@ -32,7 +33,8 @@ const SLOW_MS = Number(arg('slow', 0));           // /api/nodes 延迟多少毫�
 const SLOW_TIMES = Number(arg('slow-times', 1));  // 前几次慢（默认只慢第一次：用来验「超时后能自恢复」）
 let slowHits = 0;
 const THEME_GEESE = Number(arg('geese', 2));
-const ROOT = new URL('../dist/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+// pathname 是百分号编码的（仓库路径带空格/中文时全站 404）：必须用 fileURLToPath
+const ROOT = fileURLToPath(new URL('../dist/', import.meta.url));
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

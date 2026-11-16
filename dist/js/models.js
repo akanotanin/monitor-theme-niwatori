@@ -8,8 +8,8 @@
 //   这批模型的长边在 +z，我们的道具长边在 +x，所以需要 +90° 的朝向修正。
 
 import * as THREE from 'three';
-import { MODEL_IDS } from './model-ids.js';
-import { loadModel, cloneModel } from './glb-models.js';
+import { MODEL_IDS } from './model-ids.js?v=1.0.16';
+import { loadModel, cloneModel } from './glb-models.js?v=1.0.16';
 
 
 export const PF_VERSION = 9;   // 改这个文件时 +1，方便确认浏览器真的拿到了新代码
@@ -160,7 +160,7 @@ export async function decorate(world, scene, groundHeight, opts = {}) {
   // 没换上的道具：把自建版放出来（它们一开始是藏着的，见 world.js 的 buildScene）
   for (const p of PLAN) if (!swapped.has(p.key)) world.showFallback(p.key);
   window.__pfSwapMs = Math.round(performance.now() - t0);   // 从开始加载到全部换完的耗时（调试用）
-  window.__pfModels = ok;            // 调试/断言用：decorate 成功摆了几个（狗狗等也会 +1 到同一个全局）
+  window.__pfModels = (window.__pfModels || 0) + ok;   // 累加：狗狗等也会往同一个全局 +1
   window.__pfDecor = ok;             // 只算 decorate 自己的数
   window.__pfTotal = total;          // 应当成功的总数（cdp-verify 用它断言「一个都没少」）
   window.__pfV = PF_VERSION;

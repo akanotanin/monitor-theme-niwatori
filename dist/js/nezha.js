@@ -412,7 +412,9 @@ export class NezhaLive {
     this.ws = ws;
     ws.onopen = () => {
       if (this.ws !== ws) return;
-      this.fails = 0;
+      // ⚠ 这里不能清 fails：「Upgrade 成功但一帧都不来」时每次重连都清零，
+      //   onFail 永远只报 1 次、data.js 的「连续失败 ≥3 才提示」永远不触发（空农场无解释）。
+      //   真正的「连上了」以收到第一帧为准（onmessage 里清）。
       this.lastDataAt = Date.now();
       this._watch(ws);
     };

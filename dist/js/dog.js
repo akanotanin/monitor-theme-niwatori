@@ -7,8 +7,8 @@
 // 对外接口与 Goose/Npc 一致（pos / st / update / pushBuf / setRemote / dispose / addTo），
 // 模型挂在 `chicken` 上：main.js 里 npc.chicken.* 的老路径（射线点选、名牌淡出、手机点击球）直接可用。
 import * as THREE from 'three';
-import { sample, push } from './interp.js';
-import { cloneModel } from './glb-models.js';
+import { sample, push } from './interp.js?v=1.0.16';
+import { cloneModel } from './glb-models.js?v=1.0.16';
 
 // 与 server/farm_server.py 的 DOG_* 必须一致（tools/ci.sh 第 2 步会点名核对）
 export const DOG = {
@@ -121,6 +121,7 @@ export class DogBody {
       // 水平中心挪回 bodyG 的原点、底面贴到 y=0，否则狗会在离自己名牌十几米的地方跑。
       const bb = new THREE.Box3().setFromObject(g);
       g.position.set(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+      g.userData.baseY = g.position.y;      // 走路时只在这个基础上叠 bob，别覆盖贴地偏移
       g.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
       g.userData.pf = 'farm-dog';
       this.bodyG.add(g);
@@ -232,14 +233,21 @@ export class DogBody {
       this.bodyG.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.025 * amp;
     }
     if (this.model) {
-      this.model.position.y = Math.abs(Math.sin(this.walkPhase)) * 0.02 * amp;
+      // 模型基础高度是 loadModel 里按包围盒算的（-bb.min.y）：这里只能叠加，不能整体覆盖
+      const base = this.model.userData.baseY || 0;
+      this.model.position.y = base + Math.abs(Math.sin(this.walkPhase)) * 0.02 * amp;
     }
+    // 跳跃抬起必须能落回去（以前只写 0.14、没有复位分支，跳过一次就永久悬空）
+    if (!(this.fallback && this.fallback.visible)) this.bodyG.position.y = 0;
     if (st & ST_JUMP) this.bodyG.position.y = 0.14;
   }
 
   dispose() {
     this._dead = true;
     this.group.traverse((o) => {
+      // 精细模型是 SkeletonUtils.clone 出来的：几何体/材质与缓存 scene 共享，
+      // 在这里 dispose 会把别的狗（以及下次重建）的 GPU 资源一起释放掉。
+      if (o.userData && o.userData.pf) return;
       if (o.geometry) o.geometry.dispose();       // 方块狗每块 BoxGeometry 都是独享的
       if (o.material && o.material.map) o.material.map.dispose();
       if (o.material) o.material.dispose();

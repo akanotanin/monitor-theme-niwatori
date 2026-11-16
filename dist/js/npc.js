@@ -1,10 +1,10 @@
 // NPC 鸡：探针鸡（VPS）与网站鸡（ping 探测）的行为 —— 闲逛、暴躁追人、被啄倒
 import * as THREE from 'three';
-import { Chicken } from './chicken.js';
-import { resolveCollision, BOUNDS, groundHeight } from './world.js';
-import { sample, push } from './interp.js';
+import { Chicken } from './chicken.js?v=1.0.16';
+import { resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.16';
+import { sample, push } from './interp.js?v=1.0.16';
 import { CONF, fmtRate, fmtPct, fmtUptime, shortCpu, seenAgo } from './data.js?v=1.0.16';
-import { PROBES } from './config.js';
+import { PROBES } from './config.js?v=1.0.16';
 
 const PASTEL = [];   // 已废弃：改用 chicken.js 的 5 套写实羽色（保留常量以免外部引用报错）
 
@@ -66,7 +66,7 @@ export class Npc {
     this.chicken.setInfo(info);
     // 失联（探针离线 / 探测点一台都没数据）→ 直接躺尸；恢复后自己站起来
     this.chicken.setLimp(info.online === false);
-    if (this.chicken.hp !== this.hp) this.chicken.setHp(this.hp);
+    if (Math.round(this.hp) !== this.chicken.hp) this.chicken.setHp(this.hp);
   }
 
   probeInfo(nowT) {

@@ -1175,7 +1175,7 @@ function buildLeaves(scene, rand) {
     placed++;
   }
   mesh.count = placed;
-  mesh.instanceColor.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;   // placed===0 时它是 null
   mesh.castShadow = false;
   scene.add(mesh);
   return mesh;

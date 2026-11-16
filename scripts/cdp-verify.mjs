@@ -110,6 +110,8 @@ const results = [];
 async function record(name, path, opts, checks) {
   const { s, ws, target, problems } = await openPage(path, opts);
   const ok = await s.waitFor('!!window.__probeTheme && window.__probeTheme.farm.nodes.length > 0', 15000);
+  // 等模型全到位再读状态：decorate 单个模型的超时是 7s，固定 sleep 会读到 pfTotal=0 假红
+  if (opts.waitModels) await s.waitFor('window.__pfTotal > 0', 15000);
   // 等两帧，让首屏淡入 / NPC 出生跑完
   await sleep(opts.wait ?? 1800);
   const state = ok ? await s.eval(`(() => {
@@ -168,12 +170,12 @@ async function record(name, path, opts, checks) {
 }
 
 async function main() {
-  const farm = await record('farm-desktop', '/', { width: 1440, height: 900, wait: 5500 });
-  const farmDay = await record('farm-day', '/?light=day', { width: 1440, height: 900, wait: 5500 });
+  const farm = await record('farm-desktop', '/', { width: 1440, height: 900, wait: 2500, waitModels: true });
+  const farmDay = await record('farm-day', '/?light=day', { width: 1440, height: 900, wait: 2500, waitModels: true });
   const nodes = await record('nodes-desktop', '/nodes', { width: 1440, height: 900 });
   // 详情页按 2x 屏跑：折线图必须按 dpr 出图（1x 下「位图 760 被拉宽」也能蒙混过关）
   const detail = await record('detail-desktop', '/node/1', { width: 1440, height: 900, dpr: 2 });
-  const mobile = await record('farm-mobile', '/', { width: 390, height: 844, dpr: 2 });
+  const mobile = await record('farm-mobile', '/', { width: 390, height: 844, dpr: 2, waitModels: true });
   // 手机上真的把列表打开：卡片文字不能被挤出去（长名字/长备注也不能把列表撑出横向滚动）
   const nodesMobile = await record('nodes-mobile', '/nodes', { width: 375, height: 780, dpr: 3 });
 
@@ -248,7 +250,8 @@ async function main() {
   // 控制台异常 / 例外 / HTTP>=400 以前只写进 report.json，**不参与最终判定** ——
   // 任意 .glb、国旗 404，只要主题还能初始化，ok 仍是 true（坏资产能发布，审查 M13）。
   // 这里把预期内的噪音白名单掉（未登录时 /admin 的 401、图标探测的 404），其余一条都不放过。
-  const EXPECT_HTTP = [/\/admin\b/, /\/favicon/i, /apple-touch-icon/i];
+  const EXPECT_HTTP = [/\/admin\b/, /\/favicon/i, /apple-touch-icon/i,
+    /401 .*\/api\/me(?:\?|$)/];   // 真关了公开页的 hub：/api/me 本来就回 401（theme-boot 会渲染登录卡）
   const EXPECT_LOG = [/Failed to load resource: the server responded with a status of 40[14]/i];
   const hunt = (r) => {
     const pr = r.problems || {};
@@ -283,7 +286,8 @@ async function main() {
       && results.find((r) => r.name === 'tab-toggle')?.toNodes?.path === '/nodes'
       && results.find((r) => r.name === 'tab-toggle')?.afterBack?.path === '/'
       && results.find((r) => r.name === 'detail-tab-back')?.afterTab?.path === '/nodes'
-      && (!privateSite || (privateSite.lock && privateSite.login && !privateSite.theme && /未对访客开放/.test(privateSite.title || '')))
+      && (!privateSite || (privateSite.lock && privateSite.login && !privateSite.theme
+        && /未对访客开放|需要登录/.test(privateSite.title || '')))
 ,
   };
   writeFileSync(`${SHOTS}/report.json`, JSON.stringify(report, null, 2));

@@ -58,14 +58,24 @@ export function pickSettings(raw) {
   };
 }
 
+// ★ 引导阶段的请求也必须带超时：反代建连后不回包时，没有超时就会永远停在
+//   「正在布置农场…」—— 比数据层卡住更致命（连 main.js 都不会加载，没有任何自愈路径）。
+//   超时就抛错，上面的 try/catch 会照常回落到默认值 / me=null。
+const BOOT_TIMEOUT = 5000;
 async function getJSON(path) {
-  const r = await fetch(path, { credentials: 'same-origin', cache: 'no-store' });
-  if (!r.ok) {
-    const e = new Error(`HTTP ${r.status}`);
-    e.status = r.status;
-    throw e;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), BOOT_TIMEOUT);
+  try {
+    const r = await fetch(path, { credentials: 'same-origin', cache: 'no-store', signal: ctrl.signal });
+    if (!r.ok) {
+      const e = new Error(`HTTP ${r.status}`);
+      e.status = r.status;
+      throw e;
+    }
+    return await r.json();
+  } finally {
+    clearTimeout(timer);
   }
-  return r.json();
 }
 
 /** 自动光照：18:00–06:00 用黄昏，其余白天（与主题设置「自动」一档一致）。 */

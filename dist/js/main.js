@@ -1,18 +1,18 @@
 // 总装：渲染器、第三人称操控、输入（鼠标/键盘/触屏）、NPC 数据绑定、主循环
 import * as THREE from 'three';
 import { Farm, CONF } from './data.js?v=1.0.16';
-import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js';
-import { Chicken } from './chicken.js';
+import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.16';
+import { Chicken } from './chicken.js?v=1.0.16';
 import { Npc } from './npc.js?v=1.0.16';
-import { Goose, GOOSE } from './goose.js';
-import { Dog, DOG } from './dog.js';
+import { Goose, GOOSE } from './goose.js?v=1.0.16';
+import { Dog, DOG } from './dog.js?v=1.0.16';
 import { Hud } from './hud.js?v=1.0.16';
-import { Net } from './net.js';
+import { Net } from './net.js?v=1.0.16';
 import { SoloFarm } from './solo.js?v=1.0.16';
-import { Feathers, Dust } from './feathers.js';
-import { Sfx } from './sfx.js';
-import { decorate } from './models.js';
-import * as CFG from './config.js';
+import { Feathers, Dust } from './feathers.js?v=1.0.16';
+import { Sfx } from './sfx.js?v=1.0.16';
+import { decorate } from './models.js?v=1.0.16';
+import * as CFG from './config.js?v=1.0.16';
 
 const $ = (id) => document.getElementById(id);
 // 触屏笔记本的 Chrome/Edge 也常暴露 ontouchstart（但主指针仍是鼠标）：

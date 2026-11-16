@@ -2,9 +2,9 @@
 // 默认后端是 monitor hub；config.js 的 SOURCE === 'komari' 时字段映射走 js/komari.js（Komari
 // 的公开 API 与 monitor 不同，但映射后聚合/暴躁鸡/详情图都不用改）。
 // 页面路径形如 /chicken/，同源反代把 /chicken/api/* 转到后端的 /api/*（见 nginx 站点块）。
-import * as CFG from './config.js';
-import * as Komari from './komari.js';
-import * as Nezha from './nezha.js';
+import * as CFG from './config.js?v=1.0.16';
+import * as Komari from './komari.js?v=1.0.16';
+import * as Nezha from './nezha.js?v=1.0.16';
 
 // index.html 直开（file:// 或 /themes/x/dist/）也要落到它所在的目录，不是 index.html/api/
 const API = new URL('./api/', document.baseURI.replace(/[^/]*$/, '')).href;
@@ -95,6 +95,8 @@ export function shortCpu(name) {
 //   fetch 可以挂几分钟 —— refreshNodes 的单飞标志永远不复位，轮询从此停摆，页面看着像死了
 //   （2026-11-17 审查 H2）。超时中断和「切后台」的中断要分开：前者要报错，后者必须静默。
 const FETCH_TIMEOUT = 8000;
+// 历史查询（7 天 × 4000 点）比实时快照重得多：给它更长的超时，别把「慢」误判成「挂了」。
+const DETAIL_TIMEOUT = 15000;
 /** 浏览器时钟 - 服务器时钟（秒）。优先用响应的 HTTP Date 头，比「最新样本≈现在」可靠得多。 */
 let SERVER_SKEW = null;
 
@@ -123,19 +125,21 @@ async function getJSON(path, signal, timeout = FETCH_TIMEOUT) {
     const safePath = path.replace(/([?&]uuid=)[^&]*/gi, '$1…');
     let r;
     try {
-      r = await fetch(API + path, { headers: { accept: 'application/json' }, signal: t.signal });
+      // cache:'no-store' 同样重要：缓存下来的响应带的是「当时的」Date，拿它算时钟差会偏。
+      r = await fetch(API + path, { headers: { accept: 'application/json' }, cache: 'no-store', signal: t.signal });
     } catch (e) {
-      // 超时也表现为 AbortError；转成普通错误，上层才不会当成「切后台」静默吞掉。
       const outerAborted = (Array.isArray(signal) ? signal : [signal]).some((s) => s && s.aborted);
       if (t.timedOut() && !outerAborted) throw new Error(`${safePath} → 读取超时（${msText(timeout)}）`);
       throw e;
     }
     // 响应头里的 Date 就是服务器时钟（秒级）：用它估计时钟差，比拿样本时间戳猜准确。
+    // 中间层缓存过的响应要减掉 Age —— 否则一个 10 分钟前的 Date 会让 _age 把旧样本当「刚刚」。
     const dh = r.headers.get('date');
     if (dh) {
       const srv = Date.parse(dh);
       if (Number.isFinite(srv)) {
-        const sk = (Date.now() - srv) / 1000;
+        const age = Number(r.headers.get('age') || 0) || 0;
+        const sk = (Date.now() - srv) / 1000 - age;
         if (Math.abs(sk) < 86400) SERVER_SKEW = sk;      // 大于一天的估计肯定是坏头，不用
       }
     }
@@ -145,7 +149,15 @@ async function getJSON(path, signal, timeout = FETCH_TIMEOUT) {
       err.status = r.status;
       throw err;
     }
-    const d = await r.json();
+    let d;
+    try {
+      d = await r.json();
+    } catch (e) {
+      // 响应头到了但 body 卡住（反代缓冲/CF 半截响应）：同样是超时，必须报错而不是被当成「切后台」
+      const outerAborted = (Array.isArray(signal) ? signal : [signal]).some((s) => s && s.aborted);
+      if (t.timedOut() && !outerAborted) throw new Error(`${safePath} → 读取超时（${msText(timeout)}）`);
+      throw e;
+    }
     // Komari 的错误也可能是 HTTP 200 + {status:"error"}（例如私有站点模式），别当成数据往下传。
     if (CONF.source === 'komari' && d && typeof d === 'object' && d.status === 'error') {
       throw new Error(d.message || `${safePath} → Komari error`);
@@ -166,13 +178,19 @@ const METRIC_NUMS = ['cpu', 'mem_used', 'mem_total', 'swap_used', 'swap_total', 
   'net_rx', 'net_tx', 'uptime', 'procs', 'tcp', 'udp', 'threads', 'gpu_used'];
 function sanitizeMetrics(src) {
   const out = { ...src };
+  // ★ 先判空再转数：Number(null) === 0、Number('') === 0，直接转会把「没有数据」洗成
+  //   CPU 0% / 0 B/s / 负载 0.00（fmtBytes 专门挡过这个坑，npc/hud 的 `?? '—'` 也永远走不到）。
+  const blank = (v) => v == null || v === '' || typeof v === 'boolean';
   for (const k of METRIC_NUMS) {
     if (!(k in out)) continue;
+    if (blank(out[k])) { delete out[k]; continue; }
     const n = Number(out[k]);
     if (Number.isFinite(n) && n >= 0) out[k] = n; else delete out[k];
   }
   if ('load' in out) {
-    const load = Array.isArray(out.load) ? out.load.map(Number).filter((x) => Number.isFinite(x) && x >= 0) : [];
+    const load = Array.isArray(out.load)
+      ? out.load.filter((x) => !blank(x)).map(Number).filter((x) => Number.isFinite(x) && x >= 0)
+      : [];
     if (load.length) out.load = load; else delete out.load;
   }
   return out;
@@ -584,7 +602,7 @@ export class Farm {
     // 单飞：上一轮还没跑完不叠加请求。★但必须有兜底 —— 万一某个 await 永远不返回（反代挂住、
     //   浏览器扩展吞掉请求），_nodesBusy 会永远为 true，之后每轮刷新全部早退、页面静静停更。
     //   超过 30 秒就当成卡死，放行新一轮（2026-11-17 审查 H2）。
-    if (this._nodesBusy && now() - (this._nodesStartedAt || 0) < 30000) return;
+    if (this._nodesBusy && now() - (this._nodesStartedAt || 0) < 30) return;   // now() 是**秒**
     if (this._paused) return;
     this._nodesStartedAt = now();
     if (CONF.source === 'nezha') this._checkNezhaStale();
@@ -596,6 +614,7 @@ export class Farm {
         // 节点由 WS 推送（每 2 秒一帧），这里只刷新服务监控的统计（网站鸡）。
         // 站点开了 force_auth 时这里会 401：给出可行动的提示，别只留一座空农场。
         const data = Nezha.unwrap(await getJSON('v1/service', this._abort?.signal));
+        if (gen !== this._nodesGen) return;      // 本轮已被放行/作废：别用旧快照覆盖新数据
         const services = data && typeof data.services === 'object' && data.services ? data.services : {};
         this._services = services;
         // 任务名也给 probes（详情页的图例/名称用）；interval 只有 auth-only 的 /service/list 才有，
@@ -608,11 +627,12 @@ export class Farm {
         this._aggregate();
       } else if (CONF.source === 'komari') {
         const list = Komari.unwrap(await getJSON('nodes', this._abort?.signal));
+        if (gen !== this._nodesGen) return;
         const t = now();
         this.nodes = (Array.isArray(list) ? list : [])
           .filter((c) => c && c.uuid)
           .map((c, i) => {
-            const n = this._komariNode(c, t);
+            const n = this._komariNode(c, t - (SERVER_SKEW || 0));   // 用服务器时钟算「上次上报」
             // 数字 id 用 UUID 哈希（协议稳定），显示顺序仍跟 /api/nodes 一致。
             if (n.sort == null) n.sort = i;
             return n;
@@ -621,11 +641,13 @@ export class Farm {
         // WS 还没连上（老反代没配 /api/clients 的 Upgrade、或 Komari 刚重启）→
         // 退回逐台拉 /api/recent/<uuid>，别让整页一直显示离线。WS 连上后自动停。
         if (!this._liveConnected) recentStats = await this._komariRecentFallback(this.nodes, t);
+        if (gen !== this._nodesGen) return;
         // 兜底拿到在线/指标后立刻重算网络榜与网站鸡，不等到下一轮 ping 轮询。
         this._aggregate();
       } else {
         const d = await getJSON('nodes', this._abort?.signal);
-        // monitor 的 /api/nodes 正常是数组；d.nodes 也兼容。**必须逐项过滤**：
+        if (gen !== this._nodesGen) return;      // 上一轮卡死被放行后回来得晚：不许覆盖新一轮
+        // monitor 的 /api/nodes 正常是数组；d.nodes 也兼容。
         // 一个 null/非对象条目会让 _pruneNodeState / onlineCount / HUD 抛异常，
         // 而 main.js 的 tick 没有 try/catch → 一次坏响应就永久停掉整个 3D 循环。
         const raw = Array.isArray(d) ? d : (d && Array.isArray(d.nodes) ? d.nodes : []);
@@ -636,6 +658,7 @@ export class Farm {
           .map((n) => (n.metrics && typeof n.metrics === 'object' ? { ...n, metrics: sanitizeMetrics(n.metrics) } : n));
         this._pruneNodeState();
       }
+      if (gen !== this._nodesGen) return;
       this.lastOk = now();
       if (CONF.source === 'nezha') {
         // 服务接口成功不代表实时流通了：只在 WS 真的连着时清错误；
@@ -686,8 +709,10 @@ export class Farm {
       this._emit();
     } catch (e) {
       if (isAbort(e)) return;
-      this.error = String(e.message || e);
-      this._emit();
+      // 单台节点的 ping 失败不写全局 error：hud 会把 f.error 直接渲染成红条，
+      // 一台机器持续 5xx 就会让红条每几秒闪一次，还会盖掉 refreshNodes 真正的错误。
+      // 失败信息只留在控制台，界面由「该节点的卡片没有网络格」体现。
+      console.warn('[ping]', n.id, String(e && e.message || e));
     } finally {
       this._pingBusy = false;
     }
@@ -969,7 +994,7 @@ export class Farm {
 
   // ---- 详情：抓某节点历史（资源 + ping），按「节点+窗口+点数」缓存 60s ----
   async nodeDetail(id, { hours = 24, points = 180, force = false, signal = null } = {}) {
-    if (CONF.source === 'nezha') return this._nezhaNodeDetail(id, { hours, points, force });
+    if (CONF.source === 'nezha') return this._nezhaNodeDetail(id, { hours, points, force, signal });
     // 详情请求要能被两种事件取消：切后台（this._abort）和换档/关面板/换节点（调用方的 signal）。
     const sig = signal ? [this._abort?.signal, signal] : this._abort?.signal;
     // 窗口不能超过 hub 的保留天数（1.3.2 起匿名上限就是它，超了会被拒/截断）；history_days 是「天」
@@ -987,8 +1012,8 @@ export class Farm {
       // 统计值仍按全量记录算）。历史窗口已经按 historyDays 夹过，不会越界。
       const cap = Math.max(120, Math.min(4000, Math.round(points) * 8));
       const [load, ping] = await Promise.all([
-        getJSON(`records/load?uuid=${q}&load_type=all&hours=${hours}`, sig),
-        getJSON(`records/ping?uuid=${q}&hours=${hours}&max_count=${cap}`, sig),
+        getJSON(`records/load?uuid=${q}&load_type=all&hours=${hours}`, sig, DETAIL_TIMEOUT),
+        getJSON(`records/ping?uuid=${q}&hours=${hours}&max_count=${cap}`, sig, DETAIL_TIMEOUT),
       ]);
       d = Komari.mapDetail(Komari.unwrap(load), Komari.unwrap(ping));
     } else {
@@ -996,7 +1021,7 @@ export class Farm {
       // 详情页一次要拉多台，没有退避时被拒的那几台会静默少线（子代理审查指出）。
       for (let attempt = 0; ; attempt++) {
         try {
-          d = await getJSON(`nodes/${id}/metrics?hours=${hours}&points=${points}`, sig);
+          d = await getJSON(`nodes/${id}/metrics?hours=${hours}&points=${points}`, sig, DETAIL_TIMEOUT);
           break;
         } catch (e) {
           if (attempt >= 2 || !/HTTP (429|503)/.test(String(e && e.message))) throw e;
@@ -1049,9 +1074,9 @@ export class Farm {
    *  ★ 缓存的是**未截窗口的 1d 原始数据**（nzraw:<id>），不是每个时间档各存一份：
    *    哪吒游客只有 period=1d，1h/6h/24h 都是客户端截同一份数据 —— 以前把 hours
    *    放进 cache key，切一次档位就把同样的 10 个请求（含 9 个 TSDB 查询）重发一遍。 */
-  async _nezhaNodeDetail(id, { hours = 24, points = 180, force = false } = {}) {
+  async _nezhaNodeDetail(id, { hours = 24, points = 180, force = false, signal = null } = {}) {
     hours = Math.max(1, Math.min(24, Math.round(hours)));
-    const raw = await this._nezhaNodeRaw(id, force);
+    const raw = await this._nezhaNodeRaw(id, force, signal);
     const svc = raw.svc;
 
     // 延迟：按 task 分组抽稀（同一张图里每条线最多 points 个点）
@@ -1074,16 +1099,17 @@ export class Farm {
   }
 
   /** 抓某台哪吒节点的 1d 原始资源/延迟数据并缓存 60s。窗口截取在调用方做。 */
-  async _nezhaNodeRaw(id, force = false) {
+  async _nezhaNodeRaw(id, force = false, signal = null) {
     const key = `nzraw:${id}`;
     const c = this.detailCache.get(key);
     if (!force && c && now() - c.t < 60) return c.data;
-    const signal = this._abort?.signal;
+    // 详情请求要同时被「切后台」和「换档/关面板」取消（哪吒这里以前把调用方的 signal 丢了）
+    const sig = signal ? [this._abort?.signal, signal] : this._abort?.signal;
     const metrics = this.tsdbEnabled === false
       ? []   // 没开 TSDB：接口会成功但 data_points 为空，别白发 9 个请求
       : ['cpu', 'memory', 'swap', 'disk', 'net_in_speed', 'net_out_speed', 'tcp_conn', 'udp_conn', 'process_count'];
-    const reqs = [getJSON(`v1/server/${id}/service?period=1d`, signal)];
-    for (const m of metrics) reqs.push(getJSON(`v1/server/${id}/metrics?metric=${m}&period=1d`, signal));
+    const reqs = [getJSON(`v1/server/${id}/service?period=1d`, sig)];
+    for (const m of metrics) reqs.push(getJSON(`v1/server/${id}/metrics?metric=${m}&period=1d`, sig));
     const settled = await Promise.allSettled(reqs);
     if (isAbort(settled[0].reason)) throw settled[0].reason;
 
@@ -1113,9 +1139,9 @@ export class Farm {
   /** 哪吒网站鸡详情：一次 /api/v1/service/<id>/history?period=1d 就拿到**所有节点**的曲线，
    *  不用像 monitor 那样逐台节点查（那会按节点数放大请求与流量）。
    *  同样缓存未截窗口的原始 1d 数据（nztraw:<id>），切时间档不重发请求。 */
-  async taskHistory(id, { hours = 24, points = 180, force = false } = {}) {
+  async taskHistory(id, { hours = 24, points = 180, force = false, signal = null } = {}) {
     hours = Math.max(1, Math.min(24, Math.round(hours)));
-    const raw = await this._nezhaTaskRaw(id, force);
+    const raw = await this._nezhaTaskRaw(id, force, signal);
     const hist = raw.hist;
     const all = [];
     for (const s of hist.servers) all.push(...s.points);
@@ -1143,12 +1169,13 @@ export class Farm {
     return { series, latest, probes: hist.probes, serviceName: hist.serviceName };
   }
 
-  async _nezhaTaskRaw(id, force = false) {
+  async _nezhaTaskRaw(id, force = false, signal = null) {
     const key = `nztraw:${id}`;
     const c = this.detailCache.get(key);
     if (!force && c && now() - c.t < 60) return c.data;
+    const sig = signal ? [this._abort?.signal, signal] : this._abort?.signal;
     const body = Nezha.unwrap(await getJSON(
-      `v1/service/${id}/history?period=1d`, this._abort?.signal));
+      `v1/service/${id}/history?period=1d`, sig));
     const hist = Nezha.mapServiceHistory(body);
     Object.assign(this.probes, hist.probes);
     const data = { hist, fetchedAt: now() };

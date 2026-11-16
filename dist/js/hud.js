@@ -1,8 +1,8 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
 import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.16';
-import { PROBES } from './config.js';
-import { GOOSE } from './goose.js';
-import { DOG } from './dog.js';
+import { PROBES } from './config.js?v=1.0.16';
+import { GOOSE } from './goose.js?v=1.0.16';
+import { DOG } from './dog.js?v=1.0.16';
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ['#63b6ff', '#7ddc6a', '#ffd166', '#ff8f6b', '#c792ea', '#4dd0e1', '#f06292', '#aed581', '#fff176'];
@@ -265,8 +265,8 @@ export class Hud {
   /** 打开面板并切到详情视图。target: {kind:'probe',nodeId} / {kind:'web',taskId} / {kind:'goose'|'dog'} */
   async showDetail(target, opts = {}) {
     if (!this.plist) return;
-    // 每次打开都回到默认档位（24 小时），别沿用上一条的；切后台被打断后的自动重试要保留档位
-    if (!opts.keepRange) this._rangeIdx = null;
+    // 每次打开都回到默认档位（24 小时），别沿用上一条的；切后台被打断后的自动重试要保留档位与页签
+    if (!opts.keepRange) { this._rangeIdx = null; this._nodeTab = 'res'; }
     this._detailTarget = target;
     this._detailAborted = false;
     if (!this.probesOpen) this.showProbes();          // 从场地上点鸡进来：先把面板打开（顺带解锁指针）
@@ -280,7 +280,6 @@ export class Hud {
     this.plistSum.textContent = '';
     this.plistTitle.textContent = '…';
     this.plistDetail.innerHTML = '<p class="note">正在读探针数据…</p>';
-    this._nodeTab = 'res';             // 每次打开详情都落在「资源」页签
     const token = ++this._detailToken;
     // 新详情作废上一轮的 fan-out：关面板/换节点时在途请求要真取消，而不是跑完再被 token 丢掉
     this._detailAc?.abort();
@@ -294,15 +293,18 @@ export class Hud {
       // 切后台/关面板触发的 abort 不是数据错误，但要留一句可恢复的提示：
       // 以前这里直接 return，面板会永久停在「正在读探针数据…」，回到前台也不会重拉（审查 H2）。
       if (e && e.name === 'AbortError') {
-        if (token === this._detailToken) {
-          this._detailAborted = !!document.hidden;   // 只有切后台才自动重试；关面板/换节点不该自己弹回来
+        // 只有「切后台」才改面板并安排自动重试。被别的请求（点页签/切档）顶掉的请求要静默：
+        // 新的那次会自己画进 #dcharts，这里把面板冲掉才是真正的 bug。
+        if (token === this._detailToken && document.hidden) {
+          this._detailAborted = true;
           this.plistDetail.innerHTML = '<p class="note">读取被中断（切回页面会自动继续）…</p>';
         }
         return;
       }
       if (token === this._detailToken) {
         this.plistTitle.textContent = '读取失败';
-        this.plistDetail.innerHTML = `<p class="note">读取失败：${escapeHtml(String(e.message || e))}</p>`;
+        releaseCharts(this.plistDetail);
+    this.plistDetail.innerHTML = `<p class="note">读取失败：${escapeHtml(String(e.message || e))}</p>`;
       }
     }
   }
@@ -341,7 +343,8 @@ export class Hud {
 
     const ranges = this.farm.ranges();
     const idx = this._pickRange(ranges);
-    this._nodeTab = this._nodeTab || 'res';
+    this._nodeTab = this._nodeTab || 'res';   // keepRange 重试时保留用户选过的页签
+    releaseCharts(this.plistDetail);
     this.plistDetail.innerHTML = `
       <dl class="pgrid">${facts.filter(([, v]) => v != null && v !== '')
         .map(([k, v, title]) => `<div class="cell"><dt>${escapeHtml(k)}</dt><dd title="${escapeHtml(String(title || v))}">${escapeHtml(String(v))}</dd></div>`).join('')}</dl>
@@ -352,6 +355,10 @@ export class Hud {
       ${rangeBar(ranges, idx)}
       <div id="dcharts"></div>`;
 
+    await this._drawNode(n, ranges[idx], token, true);
+    if (token !== this._detailToken) return;
+    // ★ 页签要等首屏画完再绑定：_drawNode 进函数就 abort 上一个 controller，
+    //   首屏还在飞的时候点页签会把首屏请求自己取消掉，面板就只剩一句「读取被中断」。
     $('dtabs').addEventListener('click', (e) => {
       const b = e.target.closest?.('.tab');
       if (!b || b.dataset.tab === this._nodeTab) return;
@@ -366,10 +373,7 @@ export class Hud {
         if (box) box.innerHTML = `<p class="note">读取失败：${escapeHtml(String(err && err.message || err))}</p>`;
       });
     });
-
-    await this._drawNode(n, ranges[idx], token, true);
     // 切时间范围：只重画图，信息格不重拉
-    if (token !== this._detailToken) return;      // 请求回来时用户已经切到别的详情了
     this._bindRanges(ranges, (r) => this._drawNode(n, r, token, false));
   }
 
@@ -423,6 +427,7 @@ export class Hud {
       [memTotal > 0 ? `内存 · ${fmtBytes(memTotal)}` : '内存', [['内存', '#ffd166', (x) => x.mem_used]], memTotal || null, '', fBytes],
       [diskTotal > 0 ? `硬盘 · ${fmtBytes(diskTotal)}` : '硬盘', [['硬盘', '#7ddc6a', (x) => x.disk_used]], diskTotal || null, '', fBytes],
     ];
+    releaseCharts(box);
     box.innerHTML = `<div class="chart-grid">${panels.map(([title, ss], i) =>
       `<section class="cpanel"><h5><span>${escapeHtml(title)}</span>${lg(ss)}</h5><canvas id="ch${i}" width="760" height="170"></canvas></section>`).join('')}</div>`;
     panels.forEach(([, ss, top, unit, fmtv], i) => {
@@ -434,6 +439,7 @@ export class Hud {
   // 网络延迟页：各探测点一张多线图 + 图例（kanso 的「网络延迟」页签）
   _drawLatency(box, ping, probes, range, long) {
     const tasks = [...new Set(ping.map((p) => p.task_id))].sort((a, b) => a - b);
+    releaseCharts(box);
     box.innerHTML = `<section class="cpanel"><h5>网络延迟（${escapeHtml(range.label)}，共 ${tasks.length} 条）</h5>
         <canvas id="ch-lat" width="760" height="300"></canvas></section>
       <div class="chips" id="legend">${tasks.map((tid, i) =>
@@ -462,7 +468,7 @@ export class Hud {
       this._rangeIdx = i;
       for (const el of bar.children) el.classList.toggle('on', el === b);
       const p = onPick(ranges[i]);
-      if (p && p.catch) p.catch((err) => console.error(err));
+      if (p && p.catch) p.catch((err) => { if (!err || err.name !== 'AbortError') console.error(err); });
     });
   }
 
@@ -479,6 +485,7 @@ export class Hud {
       ['打法', `${maxHp} 血：五口啄击放倒它，榜上「${GOOSE.name}」那一行 +1（场上几只大鹅合起来算一行）`],
       ['反应', '挨啄不逃跑：你打它，它就回头盯着你、够得着就啄回来；只有被看门狗咬才会被赶跑'],
     ];
+    releaseCharts(this.plistDetail);
     this.plistDetail.innerHTML = `
       <h4>大白鹅</h4>
       <dl class="facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('')}</dl>
@@ -495,6 +502,7 @@ export class Hud {
       ['打法', '打不倒：你啄它不掉血，它也不进啄倒榜'],
       ['跑动', `溜达不快，追起来有 ${DOG.run} m/s（比暴躁鸡快）`],
     ];
+    releaseCharts(this.plistDetail);
     this.plistDetail.innerHTML = `
       <h4>看门狗</h4>
       <dl class="facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('')}</dl>
@@ -529,6 +537,7 @@ export class Hud {
 
     const ranges = this.farm.ranges();
     const idx = this._pickRange(ranges);
+    releaseCharts(this.plistDetail);
     this.plistDetail.innerHTML = `
       <h4>探测信息</h4>
       <dl class="facts">${facts.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('')}</dl>
@@ -572,7 +581,7 @@ export class Hud {
     // 哪吒：一次 /service/<id>/history?period=1d 就拿到所有节点的曲线 —— 别再按节点数放大请求。
     if (CONF.source === 'nezha') {
       const d = await this.farm.taskHistory(taskId, {
-        hours: range.hours, points: range.points, force,
+        hours: range.hours, points: range.points, force, signal: ac.signal,
       });
       if (token !== this._detailToken || req !== this._detailReq) return;
       const series = d.series.map((s, i) => ({
@@ -598,24 +607,31 @@ export class Hud {
     // 而一档 = 节点数 × 1 次历史查询（Komari 源还是 ×2），几百台的站上正好把 hub 的
     // 历史查询闸门打满、详情长时间空白（审查 M4）。按该任务最新延迟从差到好取前 N 台。
     const capN = 16;
+    // 排序只看新鲜样本（同一口径 freshPing），否则「最差 16 台」会退化成「列表前 16 台」
     const order = (n) => {
-      const v = this.farm.ping.get(n.id)?.get(taskId);
-      if (!v) return -1;                                    // 没有样本：排最后
+      const v = freshPing(this.farm, n.id, taskId);
+      if (!v) return -1;                                    // 没有新鲜样本：排最后
       return Number.isFinite(v.latency) ? v.latency : 1e9;  // 丢包（latency=null）：排最前
     };
     const pool = this.farm.nodes.filter((n) => n.online);
     const nodes = pool.slice().sort((a, b) => order(b) - order(a)).slice(0, capN);
     const omitted = pool.length - nodes.length;
+    const anyFresh = nodes.some((n) => order(n) >= 0);
     const results = new Array(nodes.length);
     let next = 0;
     const worker = async () => {
       while (next < nodes.length) {
+        if (ac.signal.aborted) return;        // 已中止：别再继续发后续节点
         const i = next++;
         const n = nodes[i];
         try {
           const d = await this.farm.nodeDetail(n.id, { hours: range.hours, points: range.points, force, signal: ac.signal });
           results[i] = { n, pts: (d.ping || []).filter((p) => p.task_id === taskId).map((p) => [p.ts, p.latency]) };
-        } catch { results[i] = null; }
+        } catch (e) {
+          // 中止不是「这台没数据」：必须冒泡到 showDetail，才能走「切回前台自动重试」
+          if (e && e.name === 'AbortError') throw e;
+          results[i] = null;
+        }
       }
     };
     await Promise.all([worker(), worker(), worker()]);
@@ -623,7 +639,9 @@ export class Hud {
     const series = [];
     for (const r of results) if (r && r.pts.length) series.push({ name: r.n.name, color: PALETTE[series.length % PALETTE.length], pts: r.pts });
 
-    h4Text('h-t1', `各节点延迟（${range.label}）${omitted > 0 ? ` · 只画最差 ${nodes.length} 台（共 ${pool.length} 台）` : ''}`);
+    h4Text('h-t1', `各节点延迟（${range.label}）${omitted > 0
+      ? (anyFresh ? ` · 只画最差 ${nodes.length} 台（共 ${pool.length} 台）` : ` · 只画前 ${nodes.length} 台（共 ${pool.length} 台）`)
+      : ''}`);
     $('legend').innerHTML = series.map((s) => `<span class="chip"><b style="color:${s.color}">■</b> ${escapeHtml(s.name)}</span>`).join('');
     drawLine($('c1'), series, {
       unit: 'ms', long: spanSec(...series.map((s) => s.pts)) > 12 * 3600,
@@ -668,6 +686,18 @@ if (typeof window !== 'undefined') {
   };
   addEventListener('resize', repaintAll);
   addEventListener('visibilitychange', () => { if (!document.hidden) repaintAll(); });
+}
+
+// 图表容器被 innerHTML 整块替换前，先把旧 canvas 上的监听/浮框/ResizeObserver 清掉：
+// 否则每切一次页签就泄漏一个 canvas（连同 series 数据与闭包），只能等一次窗口 resize 才回收。
+function releaseCharts(box) {
+  if (!box) return;
+  for (const cv of box.querySelectorAll('canvas')) {
+    try { cv.__ctipCleanup?.(); } catch { /* 已经拆过 */ }
+    try { cv.__ro?.disconnect(); } catch { /* 已经断开 */ }
+    if (liveCharts) liveCharts.delete(cv);
+    cv.__paint = null;
+  }
 }
 
 // 折线图（canvas 手绘）。opts.hover=true 时挂上「竖线 + 数值浮框」（kanso 那种）。

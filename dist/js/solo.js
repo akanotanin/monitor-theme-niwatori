@@ -13,10 +13,10 @@
 // 大白鹅 60 血 / 啄 6 / 领地 2.5m、看门狗 9 伤害 / 冷却 1.1s 等）。
 
 import { Npc } from './npc.js?v=1.0.16';
-import { Goose } from './goose.js';
-import { Dog, DOG } from './dog.js';
+import { Goose } from './goose.js?v=1.0.16';
+import { Dog, DOG } from './dog.js?v=1.0.16';
 import { CONF } from './data.js?v=1.0.16';
-import { resolveCollision, BOUNDS, groundHeight } from './world.js';
+import { resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.16';
 
 const THEME = (typeof window !== 'undefined' && window.CP_THEME) || {};
 

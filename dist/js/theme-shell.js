@@ -58,7 +58,9 @@ function start() {
   }
 
   // ---------- 路由 → 界面 ----------
+  let applyGen = 0;
   async function apply(next, { ui = true } = {}) {
+    const gen = ++applyGen;
     route = next;
     applying = true;
     try {
@@ -82,6 +84,7 @@ function start() {
 
       // detail
       const node = await resolveNode(next.key);
+      if (gen !== applyGen) return;      // 等数据期间用户又点了别的：这次 apply 作废
       if (!node) {
         // 节点被删了 / 深链写错了：退回列表，别停在空白详情上
         push('/nodes', true);
@@ -96,13 +99,17 @@ function start() {
         hud.showDetail({ kind: 'probe', nodeId: node.id });
       }
     } finally {
-      applying = false;
+      if (gen === applyGen) applying = false;
     }
   }
 
   // 用户操作已经改过界面时，只同步「地址栏 + 暂停状态 + body class」，不再重复开合面板
   function follow(next) {
-    if (applying) return;
+    if (applying) {
+      // 用户已经改过界面：让在途的 apply 作废（否则它回来会把面板/标题改回去）
+      applyGen++;
+      applying = false;
+    }
     const sameView = route.view === next.view && (next.view !== 'detail' || route.key === next.key);
     if (sameView) return;
     route = next;
@@ -151,6 +158,11 @@ function start() {
   // 用捕获阶段拦下，别让 main.js 的 Tab 处理再 toggle 一次（否则会开了又关）。
   addEventListener('keydown', (e) => {
     if (e.code !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
+    // 焦点已经落进面板（点过页签/按钮）或按的是 Shift+Tab：把 Tab 还给浏览器，
+    // 否则面板里的控件键盘永远到不了（Esc 仍可关面板）。
+    if (e.shiftKey) return;
+    const ae = document.activeElement;
+    if (ae && ae.closest && ae.closest('#plist')) return;
     // 详情里按 Tab ＝ 回列表（和 Esc 的「详情 → 列表」一致，而不是一路跳回农场）
     if (hud.view === 'detail' && hud.probesOpen) {
       e.preventDefault();
