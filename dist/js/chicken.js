@@ -44,7 +44,7 @@ function shade(hex, k) {
   return (r << 16) | (gg << 8) | b;
 }
 
-// ---- 国旗图片：本地 vendor/flags/<cc>.png（安装时由 tools/fetch_flags.sh 下好）----
+// ---- 国旗图片：本地 vendor/flags/<cc>.png（随包分发，250 面）----
 // 同源图片：不用 crossOrigin，也就没有 CORS 失败的问题；缺图时退化成两字母/表情。
 const FLAG_DIR = new URL('../vendor/flags/', import.meta.url).href;
 const flagCache = new Map();

@@ -1,10 +1,10 @@
 // NPC 鸡：探针鸡（VPS）与网站鸡（ping 探测）的行为 —— 闲逛、暴躁追人、被啄倒
 import * as THREE from 'three';
-import { Chicken } from './chicken.js?v=1.0.16';
-import { resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.16';
-import { sample, push } from './interp.js?v=1.0.16';
-import { CONF, fmtRate, fmtPct, fmtUptime, shortCpu, seenAgo } from './data.js?v=1.0.16';
-import { PROBES } from './config.js?v=1.0.16';
+import { Chicken } from './chicken.js?v=1.0.17';
+import { resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.17';
+import { sample, push } from './interp.js?v=1.0.17';
+import { CONF, fmtRate, fmtPct, fmtUptime, shortCpu, seenAgo } from './data.js?v=1.0.17';
+import { PROBES } from './config.js?v=1.0.17';
 
 const PASTEL = [];   // 已废弃：改用 chicken.js 的 5 套写实羽色（保留常量以免外部引用报错）
 
@@ -120,7 +120,7 @@ export class Npc {
     return {
       kind: 'web', online: t.n > 0, hot: false,
       title: t.name || cfg.name || `探测#${this.taskId}`,
-      // 图标 = 这个探测点 IP 所在地的国旗（tools/gen_config.py 在生成时解析 + 查库，只导出两个字母的码）。
+      // 图标 = 这个探测点 IP 所在地的国旗（config.js 里只存两个字母的码）。
       // 哪吒的服务监控是多个 Agent 一起探，没有单一探测点 → 用 🌐。
       code: cfg.flag || '🌐',
       // 只给"在测多少 / 丢包"这类统计，不给探测目标域名（隐私约定）

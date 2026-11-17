@@ -158,11 +158,9 @@ function start() {
   // 用捕获阶段拦下，别让 main.js 的 Tab 处理再 toggle 一次（否则会开了又关）。
   addEventListener('keydown', (e) => {
     if (e.code !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
-    // 焦点已经落进面板（点过页签/按钮）或按的是 Shift+Tab：把 Tab 还给浏览器，
-    // 否则面板里的控件键盘永远到不了（Esc 仍可关面板）。
-    if (e.shiftKey) return;
-    const ae = document.activeElement;
-    if (ae && ae.closest && ae.closest('#plist')) return;
+    // ⚠ 这里不要做「焦点在面板里就放行」：main.js 的全局 Tab 处理器没有同样的判断，
+    //   放行后事件继续冒泡、面板照样被 toggle —— 那个判断是无效改动，已撤回。
+    //   Tab 的语义由站长定：农场 ⇄ 列表直接开关（关闭也可以按 Esc / ✕）。
     // 详情里按 Tab ＝ 回列表（和 Esc 的「详情 → 列表」一致，而不是一路跳回农场）
     if (hud.view === 'detail' && hud.probesOpen) {
       e.preventDefault();

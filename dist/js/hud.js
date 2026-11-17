@@ -1,8 +1,8 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
-import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.16';
-import { PROBES } from './config.js?v=1.0.16';
-import { GOOSE } from './goose.js?v=1.0.16';
-import { DOG } from './dog.js?v=1.0.16';
+import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.17';
+import { PROBES } from './config.js?v=1.0.17';
+import { GOOSE } from './goose.js?v=1.0.17';
+import { DOG } from './dog.js?v=1.0.17';
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ['#63b6ff', '#7ddc6a', '#ffd166', '#ff8f6b', '#c792ea', '#4dd0e1', '#f06292', '#aed581', '#fff176'];
@@ -97,6 +97,9 @@ export class Hud {
     this.plistTitle.textContent = '🖥 探针列表';
     this._plistSig = '';
     this.renderProbes(true);
+    // 读屏/键盘用户：打开时把焦点移进面板（Tab 仍是站长定的「直接开关」，这里不改语义）
+    $('btn-probes')?.setAttribute('aria-expanded', 'true');
+    setTimeout(() => { try { $('plist-close')?.focus({ preventScroll: true }); } catch { /* 老浏览器 */ } }, 0);
     // 指针锁定时点不到按钮，但 Tab 也走这条路 —— 统一解锁
     if (document.pointerLockElement) document.exitPointerLock?.();
   }
@@ -108,6 +111,9 @@ export class Hud {
     this._detailAc?.abort(); this._detailAc = null;
     this.plist.classList.remove('is-detail');
     this.plist.classList.add('hidden');
+    // 关闭后把焦点还给顶栏按钮，别让焦点留在已隐藏的节点里
+    $('btn-probes')?.setAttribute('aria-expanded', 'false');
+    try { $('btn-probes')?.focus({ preventScroll: true }); } catch { /* 老浏览器 */ }
   }
   /** Esc 的语义：详情 → 回列表；列表 → 关面板（Tab 则是直接开关） */
   escProbes() {
@@ -718,6 +724,17 @@ function drawLine(canvas, series, { unit = '', max = null, dual = false, long = 
   const ts1 = clean.length ? Math.max(...clean.map((p) => p[0])) : 0;
   const vals = clean.map((p) => p[1]);
   const vMax = max != null ? max : (Math.max(...vals) * 1.15 || 1);
+  // 图表没有文本替代：给 canvas 一个 role=img + 摘要（数值只在悬停浮框里，读屏拿不到）
+  if (canvas.setAttribute) {
+    const peak = vals.length ? Math.max(...vals) : null;
+    const mean = vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null;
+    // 有 format 就用它（B/s、%、ms 都能带单位），没有才退化成「数值 + unit」
+    const show = (v) => (v == null ? '无'
+      : (format ? String(format(v)) : `${Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10}${unit}`));
+    canvas.setAttribute('role', 'img');
+    canvas.setAttribute('aria-label', `${series.map((s) => s.name).join('、') || '无数据'}`
+      + (clean.length ? `；峰值 ${show(peak)}，均值 ${show(mean)}，共 ${clean.length} 个采样` : '；暂无数据'));
+  }
   const yScale = (v) => padT + ih * (1 - Math.max(0, Math.min(1, v / vMax)));
   const xScale = (t) => padL + iw * (ts1 === ts0 ? 0.5 : (t - ts0) / (ts1 - ts0));
 

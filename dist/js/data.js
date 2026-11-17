@@ -2,18 +2,18 @@
 // 默认后端是 monitor hub；config.js 的 SOURCE === 'komari' 时字段映射走 js/komari.js（Komari
 // 的公开 API 与 monitor 不同，但映射后聚合/暴躁鸡/详情图都不用改）。
 // 页面路径形如 /chicken/，同源反代把 /chicken/api/* 转到后端的 /api/*（见 nginx 站点块）。
-import * as CFG from './config.js?v=1.0.16';
-import * as Komari from './komari.js?v=1.0.16';
-import * as Nezha from './nezha.js?v=1.0.16';
+import * as CFG from './config.js?v=1.0.17';
+import * as Komari from './komari.js?v=1.0.17';
+import * as Nezha from './nezha.js?v=1.0.17';
 
 // index.html 直开（file:// 或 /themes/x/dist/）也要落到它所在的目录，不是 index.html/api/
 const API = new URL('./api/', document.baseURI.replace(/[^/]*$/, '')).href;
 
-// 站点玩法选项（js/site-options.js 由一键安装器写入；没有就用下面这套默认值）
+// 站点玩法选项（window.CP_OPTIONS 由 theme-boot 写入；没有就用下面这套默认值）
 const OPT = (typeof window !== 'undefined' && window.CP_OPTIONS) || {};
 const num = (v, d) => (typeof v === 'number' && isFinite(v) && v >= 0 ? v : d);
 // 数据源：monitor（默认，monitor hub 的 /api/*）、komari（Komari 公开 API）或 nezha（哪吒监控公开 API）。
-// site-options 里的 source 只给本地自测/手动覆盖用（安装器不会写它；生产看 config.js 的 SOURCE）。
+// 这里的 source 只给本地自测/手动覆盖用（生产看 config.js 的 SOURCE）。
 const SRC_OPT = OPT.source === 'komari' || OPT.source === 'nezha' ? OPT.source : null;
 const SRC_CFG = CFG.SOURCE === 'komari' || CFG.SOURCE === 'nezha' ? CFG.SOURCE : null;
 
@@ -1108,8 +1108,8 @@ export class Farm {
     const metrics = this.tsdbEnabled === false
       ? []   // 没开 TSDB：接口会成功但 data_points 为空，别白发 9 个请求
       : ['cpu', 'memory', 'swap', 'disk', 'net_in_speed', 'net_out_speed', 'tcp_conn', 'udp_conn', 'process_count'];
-    const reqs = [getJSON(`v1/server/${id}/service?period=1d`, sig)];
-    for (const m of metrics) reqs.push(getJSON(`v1/server/${id}/metrics?metric=${m}&period=1d`, sig));
+    const reqs = [getJSON(`v1/server/${id}/service?period=1d`, sig, DETAIL_TIMEOUT)];
+    for (const m of metrics) reqs.push(getJSON(`v1/server/${id}/metrics?metric=${m}&period=1d`, sig, DETAIL_TIMEOUT));
     const settled = await Promise.allSettled(reqs);
     if (isAbort(settled[0].reason)) throw settled[0].reason;
 
@@ -1175,7 +1175,7 @@ export class Farm {
     if (!force && c && now() - c.t < 60) return c.data;
     const sig = signal ? [this._abort?.signal, signal] : this._abort?.signal;
     const body = Nezha.unwrap(await getJSON(
-      `v1/service/${id}/history?period=1d`, sig));
+      `v1/service/${id}/history?period=1d`, sig, DETAIL_TIMEOUT));
     const hist = Nezha.mapServiceHistory(body);
     Object.assign(this.probes, hist.probes);
     const data = { hist, fetchedAt: now() };

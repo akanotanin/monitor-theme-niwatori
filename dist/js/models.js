@@ -8,8 +8,8 @@
 //   这批模型的长边在 +z，我们的道具长边在 +x，所以需要 +90° 的朝向修正。
 
 import * as THREE from 'three';
-import { MODEL_IDS } from './model-ids.js?v=1.0.16';
-import { loadModel, cloneModel } from './glb-models.js?v=1.0.16';
+import { MODEL_IDS } from './model-ids.js?v=1.0.17';
+import { loadModel, cloneModel } from './glb-models.js?v=1.0.17';
 
 
 export const PF_VERSION = 9;   // 改这个文件时 +1，方便确认浏览器真的拿到了新代码

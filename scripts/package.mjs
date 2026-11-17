@@ -81,9 +81,20 @@ function header(name, size, mtime, mode = 0o644) {
   return h;
 }
 
+// 文本条目统一归一成 LF：Windows 工作区是 CRLF、仓库/CI 是 LF，不归一的话
+// 「同一份源码」在不同 checkout 上打出来的包哈希不同（审查 R6）。二进制不动。
+const TEXT_EXT = /\.(js|mjs|css|html|json|svg|md|txt|map)$/i;
+const asText = (name) => TEXT_EXT.test(name) || /(^|\/)(LICENSE|THIRD-PARTY-NOTICES\.md)$/i.test(name);
+const normalizeText = (buf, name) => {
+  if (!asText(name) || buf.includes(0)) return buf;
+  // 用 split/join 而不是正则：脚本按 CRLF 保存时，正则里的转义很容易被写坏（本项目踩过）
+  const text = buf.toString('utf8').split(String.fromCharCode(13) + String.fromCharCode(10)).join(String.fromCharCode(10));
+  return Buffer.from(text, 'utf8');
+};
+
 const parts = [];
 for (const f of files) {
-  const data = await readFile(f.full);
+  const data = normalizeText(await readFile(f.full), f.name);
   parts.push(header(f.name, data.length, EPOCH * 1000), data);
   const pad = (BLOCK - (data.length % BLOCK)) % BLOCK;
   if (pad) parts.push(Buffer.alloc(pad, 0));

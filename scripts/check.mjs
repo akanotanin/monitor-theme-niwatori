@@ -15,6 +15,12 @@ import { execFileSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// 顶层兜底：缺文件/权限问题不该只甩一段裸栈，至少告诉人「自检没跑完」
+process.on('uncaughtException', (e) => {
+  console.error(`\n✗ 自检异常退出（不是断言失败）：${(e && e.message) || e}`);
+  process.exit(1);
+});
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const errors = [];
@@ -159,6 +165,30 @@ for (const f of REQUIRED_JS) {
 if (!existsSync(join(DIST, 'vendor/three.module.js'))) err('dist/vendor/three.module.js 不存在（3D 引擎）');
 else ok('3D 引擎与主题模块齐全');
 
+// 扫描前剥掉注释用的状态机（模块图与版本号扫描共用）。
+const stripComments = (src) => {
+  let out = '';
+  let i = 0;
+  let state = null;                    // 'line' | 'block' | 'sq' | 'dq' | 'tpl'
+  while (i < src.length) {
+    const c = src[i];
+    const d = src[i + 1];
+    if (state === 'line') { if (c === '\n') { state = null; out += c; } i++; continue; }
+    if (state === 'block') { if (c === '*' && d === '/') { state = null; i += 2; } else i++; continue; }
+    if (state) {
+      out += c;
+      if (c === '\\') { out += d || ''; i += 2; continue; }
+      if ((state === 'sq' && c === "'") || (state === 'dq' && c === '"') || (state === 'tpl' && c === '`')) state = null;
+      i++; continue;
+    }
+    if (c === '/' && d === '/') { state = 'line'; i += 2; continue; }
+    if (c === '/' && d === '*') { state = 'block'; i += 2; continue; }
+    if (c === "'" || c === '"' || c === '`') { state = c === "'" ? 'sq' : (c === '"' ? 'dq' : 'tpl'); out += c; i++; continue; }
+    out += c; i++;
+  }
+  return out;
+};
+
 // ---------- 模块图闭包 + 语法检查（2026-11-17 加，同日二轮加固）----------
 // 以前只核对 REQUIRED_JS 里的 13 个文件名：删模块、删 addon、改 importmap、写语法错都 exit=0。
 // 现在从 index.html 的入口把整张模块图走一遍（importmap 以 index.html 里那份 JSON 为唯一真源），
@@ -193,28 +223,7 @@ const moduleFiles = [];
   // 注释里出现的旧路径不该让自检失败：扫描前先按「字符串/注释」状态机剥掉注释。
   // ⚠ 不能用简单的 /\/\*[\s\S]*?\*\// ：注释里出现 /api/* 这种片段会把它当成块注释起点，
   //   一直吞到文件里下一个 */ —— 那样整张模块图会静默少掉模块（本次自测就吞掉了 komari/nezha）。
-  const stripComments = (src) => {
-    let out = '';
-    let i = 0;
-    let state = null;                    // 'line' | 'block' | 'sq' | 'dq' | 'tpl'
-    while (i < src.length) {
-      const c = src[i];
-      const d = src[i + 1];
-      if (state === 'line') { if (c === '\n') { state = null; out += c; } i++; continue; }
-      if (state === 'block') { if (c === '*' && d === '/') { state = null; i += 2; } else i++; continue; }
-      if (state) {
-        out += c;
-        if (c === '\\') { out += d || ''; i += 2; continue; }
-        if ((state === 'sq' && c === "'") || (state === 'dq' && c === '"') || (state === 'tpl' && c === '`')) state = null;
-        i++; continue;
-      }
-      if (c === '/' && d === '/') { state = 'line'; i += 2; continue; }
-      if (c === '/' && d === '*') { state = 'block'; i += 2; continue; }
-      if (c === "'" || c === '"' || c === '`') { state = c === "'" ? 'sq' : (c === '"' ? 'dq' : 'tpl'); out += c; i++; continue; }
-      out += c; i++;
-    }
-    return out;
-  };
+
   const SPEC_RE = /(?:^|[^\w$.])(?:import|export)\s+(?:[^'"\n]*?\sfrom\s*)?['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]/g;
   const specsOf = (src) => {
     const out = [];
@@ -275,15 +284,22 @@ const moduleFiles = [];
   // 语法检查：用 --experimental-default-type=module 明确按 ESM 解析
   // （否则 package.json 丢了 "type":"module" 时 node --check 会把 ESM 当 CJS，整道闸门静默失效）
   const syn = [];
+  const envFail = [];
   for (const rel of moduleFiles) {
     try {
       execFileSync(process.execPath, ['--experimental-default-type=module', '--check', join(DIST, rel)], { stdio: 'pipe' });
     } catch (e) {
+      // EPERM/ENOENT 是「跑不起来 node」，不是代码有语法错 —— 分开报，别误导排查。
+      if (e && (e.code === 'EPERM' || e.code === 'ENOENT' || e.code === 'EAGAIN')) {
+        envFail.push(`${rel}：${e.code}`);
+        continue;
+      }
       const line = String(e.stderr || e.message || '').split('\n').find((l) => /Error|error/.test(l)) || '语法错误';
       syn.push(`${rel}：${line.trim().slice(0, 120)}`);
     }
   }
   if (syn.length) err(`node --check 失败：\n    ${syn.join('\n    ')}`);
+  if (envFail.length) err(`无法运行 node --check（环境限制，不是代码问题）：${envFail.slice(0, 3).join('、')}`);
   if (!missing.length && !badSpec.length && !noVer.length && !syn.length) {
     ok(`模块图 ${moduleFiles.length} 个模块、语法检查与 ?v= 全部通过`);
   }
@@ -325,8 +341,10 @@ if (manifest?.version) {
   } catch { /* 模块图那关已经报过 */ }
   const scan = new Set([...moduleFiles, 'index.html', 'style.css', 'theme.css']);
   for (const rel of scan) {
-    let src;
-    try { src = await readFile(join(DIST, rel), 'utf8'); } catch { continue; }
+    let raw;
+    try { raw = await readFile(join(DIST, rel), 'utf8'); } catch { continue; }
+    // 只看代码：注释里写「旧版是 ?v=1.0.15」不该判成版本不一致
+    const src = stripComments(raw);
     for (const m of src.matchAll(/\?v=([0-9A-Za-z.\-]+)/g)) if (m[1] !== ver) wrong.push(`${rel} ?v=${m[1]}`);
   }
   try {

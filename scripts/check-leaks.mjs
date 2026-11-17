@@ -12,7 +12,7 @@
 // 为什么名单要放本地文件：把「不能出现的域名」写进脚本本身，等于把域名再公开一遍。
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -46,11 +46,30 @@ function loadList() {
 
 // ---------- 文件枚举 ----------
 const git = (args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+/** git 不可用时（没装 git、源码 zip、沙箱拒子进程）返回 null —— 脱敏自检不该因此拦住发版。 */
+function gitSafe(args) {
+  try { return git(args); } catch { return null; }
+}
+
+function walk(dir, prefix = '', out = []) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (SKIP_DIRS.has(e.name)) continue;
+    const rel = prefix ? `${prefix}/${e.name}` : e.name;
+    if (e.isDirectory()) walk(join(dir, e.name), rel, out);
+    else if (e.isFile()) out.push(rel);
+  }
+  return out;
+}
 
 function listFiles() {
-  const tracked = git(['ls-files']).split('\n').filter(Boolean);
-  const untracked = git(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean);
-  return [...new Set([...tracked, ...untracked])].filter((f) => {
+  const query = ['ls-files'];
+  const tracked = gitSafe(query);
+  if (tracked == null) {
+    console.log('· 没有可用的 git：改成遍历工作区（跳过 .git/node_modules/release）');
+    return walk(ROOT);
+  }
+  const untracked = gitSafe(['ls-files', '--others', '--exclude-standard']) || '';
+  return [...new Set([...tracked.split('\n'), ...untracked.split('\n')])].filter(Boolean).filter((f) => {
     const top = f.split('/')[0];
     if (SKIP_DIRS.has(top)) return false;
     try { return statSync(join(ROOT, f)).isFile(); } catch { return false; }
@@ -86,7 +105,9 @@ for (const rel of listFiles()) {
 
 // 提交信息也算「公开出去的文字」
 const allRules = [...listRules, ...GENERIC];
-const log = git(['log', '--all', '--format=%H%x09%B']);
+const log = gitSafe(['log', '--all', '--format=%H%x09%B']);
+if (log == null) console.log('· 没有可用的 git：跳过提交信息扫描');
+else
 for (const block of log.split('\n\n')) {
   const [head, ...rest] = block.split('\n');
   if (!head) continue;

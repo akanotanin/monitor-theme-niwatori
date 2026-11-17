@@ -3,7 +3,7 @@
 //   · js/models.js 一被 import 就开始预取，和 three.js 的下载/搭场景重叠，
 //     这些模型就已经在路上了 —— 用户进页面时不会先看到一批自建道具、几秒后才被替换。
 // ⚠ 改 js/models.js 的 PLAN/DECOR（或 js/dog.js 的狗）时，记得同步这里；漏一个只是少预热一次，
-//   不影响功能（models.js 的 loadOne 还会按需加载）。tools/ci.sh 有一条点名核对的静态门禁。
+//   不影响功能（models.js 的 loadOne 还会按需加载）。npm run check 会点名核对这份清单。
 export const MODEL_IDS = [
   'compact-tractor-35b84b',
   'roofed-well-43a2fc',

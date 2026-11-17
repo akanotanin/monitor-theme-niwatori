@@ -7,10 +7,10 @@
 // 对外接口与 Goose/Npc 一致（pos / st / update / pushBuf / setRemote / dispose / addTo），
 // 模型挂在 `chicken` 上：main.js 里 npc.chicken.* 的老路径（射线点选、名牌淡出、手机点击球）直接可用。
 import * as THREE from 'three';
-import { sample, push } from './interp.js?v=1.0.16';
-import { cloneModel } from './glb-models.js?v=1.0.16';
+import { sample, push } from './interp.js?v=1.0.17';
+import { cloneModel } from './glb-models.js?v=1.0.17';
 
-// 与 server/farm_server.py 的 DOG_* 必须一致（tools/ci.sh 第 2 步会点名核对）
+// 与联机服（server/farm_server.py，不在本仓库）的 DOG_* 必须一致
 export const DOG = {
   name: '🐕 看门狗',
   sense: 8.0,      // 发现暴躁鸡 / 大白鹅的距离（它只守鸡舍门口这一片）

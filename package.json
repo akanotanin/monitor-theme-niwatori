@@ -1,6 +1,6 @@
 {
   "name": "monitor-theme-niwatori",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "private": true,
   "type": "module",
   "description": "Monitor theme: a playable 3D chicken farm built on cyber-probe",
@@ -18,6 +18,6 @@
     "verify": "node scripts/cdp-verify.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   }
 }

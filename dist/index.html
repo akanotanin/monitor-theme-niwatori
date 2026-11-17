@@ -12,10 +12,10 @@
 <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-<link rel="stylesheet" href="./style.css?v=1.0.16">
-<link rel="stylesheet" href="./theme.css?v=1.0.16">
+<link rel="stylesheet" href="./style.css?v=1.0.17">
+<link rel="stylesheet" href="./theme.css?v=1.0.17">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }</script>
-<script type="module" src="./js/theme-boot.js?v=1.0.16"></script>
+<script type="module" src="./js/theme-boot.js?v=1.0.17"></script>
 </head>
 <body>
 <div id="app"></div>
@@ -32,12 +32,13 @@
     <div class="stat dim" id="visitors" title="场上玩家">👤 访客 <b>1</b> 鸡</div>
 
     <div id="tools">
-      <button id="btn-probes" type="button" title="探针列表（Tab）：这台站监控的所有服务器" aria-label="探针列表">🖥</button>
+      <button id="btn-probes" type="button" title="探针列表（Tab）：这台站监控的所有服务器" aria-label="探针列表" aria-controls="plist" aria-expanded="false">🖥</button>
     </div>
   </div>
 
-  <div id="feed"></div>
-  <div id="banner"></div>
+  <!-- 动态播报：读屏用户要能听到「被啄 / 断线 / 网络劣化」，内容本身仍是 textContent -->
+  <div id="feed" aria-live="polite" aria-relevant="additions"></div>
+  <div id="banner" role="status" aria-live="polite"></div>
 
   <!-- 右上啄倒榜：单机模式下换成自己的战绩（主题的 solo.js 负责喂数据） -->
   <div id="board" class="collapsed" title="点击展开 / 收起">
@@ -63,7 +64,7 @@
   </div>
 </div>
 
-<div id="errbar" class="hidden"></div>
+<div id="errbar" class="hidden" role="alert" aria-live="assertive"></div>
 
 <!-- 探针列表 / 详情：既是悬浮层（Tab），也是 /nodes 与 /node/<id> 路由的页面主体（theme-shell.js 切 class）。 -->
 <div id="plist" class="hidden" role="dialog" aria-modal="true" aria-labelledby="plist-title">

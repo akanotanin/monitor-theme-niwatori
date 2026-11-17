@@ -6,6 +6,8 @@
 随包分发的文件：`dist/vendor/three.module.js`、`dist/vendor/addons/**`（5 个文件：`geometries/ConvexGeometry.js`、`loaders/GLTFLoader.js`、`math/ConvexHull.js`、`utils/BufferGeometryUtils.js`、`utils/SkeletonUtils.js`）。
 
 与 npm `three@0.169.0` 逐字节一致，未做修改。
+其中 `addons/geometries/ConvexGeometry.js` 与 `addons/math/ConvexHull.js` 目前**没有被主题引用**，
+随 three r169 的 addons 一并分发（保留是为了以后做凸包碰撞时不用再补 vendor）。
 
 ```
 The MIT License

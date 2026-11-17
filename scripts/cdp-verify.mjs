@@ -154,6 +154,7 @@ async function record(name, path, opts, checks) {
           model: !!d.chicken?.model,
           parentIsBody: !!(d.chicken?.model && d.chicken.model.parent === d.chicken.bodyG),
         })) : [],
+      dogCfg: (window.CP_THEME && Number(window.CP_THEME.dogs)) || 0,
       geese: p.npcs ? [...p.npcs.values()].filter((n) => n.kind === 'goose').length : 0,
       pfModels: window.__pfModels || 0,
       pfDecor: window.__pfDecor || 0,
@@ -251,7 +252,8 @@ async function main() {
   // 任意 .glb、国旗 404，只要主题还能初始化，ok 仍是 true（坏资产能发布，审查 M13）。
   // 这里把预期内的噪音白名单掉（未登录时 /admin 的 401、图标探测的 404），其余一条都不放过。
   const EXPECT_HTTP = [/\/admin\b/, /\/favicon/i, /apple-touch-icon/i,
-    /401 .*\/api\/me(?:\?|$)/];   // 真关了公开页的 hub：/api/me 本来就回 401（theme-boot 会渲染登录卡）
+    // 真关了公开页的 hub：/api/me 与 /api/themes/<short>/config 本来就回 401（theme-boot 会渲染登录卡）
+    /401 .*\/api\/me(?:\?|$)/, /401 .*\/api\/themes\/[^/]+\/config(?:\?|$)/];
   const EXPECT_LOG = [/Failed to load resource: the server responded with a status of 40[14]/i];
   const hunt = (r) => {
     const pr = r.problems || {};
@@ -274,8 +276,8 @@ async function main() {
       // 模型必须一个不少：__pfModels 是「成功摆上去的数量」，以前只断言 > 10，
       // 而实际有 29 个模型 × 多处摆放（44 次）—— 24 个 404 也能通过（审查 M13）。
       && farm.pfTotal > 0 && farm.pfDecor === farm.pfTotal && farm.pfLog === farm.pfTotal
-      // 有模型的狗必须都还挂在自己身上（多狗共用缓存 scene 的回归：第一只只剩名牌）
-      && farm.dogs.every((d) => !d.model || d.parentIsBody)
+      // 狗：数量要对得上配置，且每只都必须挂着自己的模型（共用缓存 scene 的回归 + 模型静默失败）
+      && farm.dogs.length === farm.dogCfg && farm.dogs.every((d) => d.model && d.parentIsBody)
       && farm.npcs > 0 && nodes.paused === true && detail.detail === true
       // 三网：一格一个运营商（以前三个任务全是电信时这里会是 电信/电信/电信）
       && threeNet(nodes) && threeNet(nodesMobile)

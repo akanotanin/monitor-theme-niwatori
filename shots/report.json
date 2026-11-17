@@ -6,9 +6,9 @@
     "ok": true,
     "body": "solo route-farm",
     "paused": false,
-    "nodes": 6,
-    "online": 4,
-    "npcs": 11,
+    "nodes": 7,
+    "online": 5,
+    "npcs": 20,
     "kinds": [
       "dog",
       "goose",
@@ -20,10 +20,28 @@
     "detail": false,
     "cards": 0,
     "canvases": 0,
+    "net": [],
+    "overflow": 0,
+    "chart": null,
     "title": "探针鸡农场 · Mock",
     "models": true,
-    "pfModels": 44,
-    "shot": "./shots/farm-desktop.png",
+    "dogs": [
+      {
+        "model": true,
+        "parentIsBody": true
+      },
+      {
+        "model": true,
+        "parentIsBody": true
+      }
+    ],
+    "dogCfg": 2,
+    "geese": 2,
+    "pfModels": 45,
+    "pfDecor": 43,
+    "pfTotal": 43,
+    "pfLog": 43,
+    "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/farm-desktop.png",
     "problems": {
       "console": [],
       "exceptions": [],
@@ -36,9 +54,9 @@
     "ok": true,
     "body": "solo route-farm",
     "paused": false,
-    "nodes": 6,
-    "online": 4,
-    "npcs": 11,
+    "nodes": 7,
+    "online": 5,
+    "npcs": 20,
     "kinds": [
       "dog",
       "goose",
@@ -50,10 +68,28 @@
     "detail": false,
     "cards": 0,
     "canvases": 0,
+    "net": [],
+    "overflow": 0,
+    "chart": null,
     "title": "探针鸡农场 · Mock",
     "models": true,
-    "pfModels": 44,
-    "shot": "./shots/farm-day.png",
+    "dogs": [
+      {
+        "model": true,
+        "parentIsBody": true
+      },
+      {
+        "model": true,
+        "parentIsBody": true
+      }
+    ],
+    "dogCfg": 2,
+    "geese": 2,
+    "pfModels": 45,
+    "pfDecor": 43,
+    "pfTotal": 43,
+    "pfLog": 43,
+    "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/farm-day.png",
     "problems": {
       "console": [],
       "exceptions": [],
@@ -66,9 +102,9 @@
     "ok": true,
     "body": "solo",
     "paused": true,
-    "nodes": 6,
-    "online": 4,
-    "npcs": 11,
+    "nodes": 7,
+    "online": 5,
+    "npcs": 20,
     "kinds": [
       "dog",
       "goose",
@@ -78,12 +114,46 @@
     "solo": true,
     "hudOpen": true,
     "detail": false,
-    "cards": 6,
+    "cards": 7,
     "canvases": 0,
+    "net": [
+      [
+        "电信",
+        "联通",
+        "移动"
+      ],
+      [
+        "电信",
+        "联通",
+        "移动"
+      ],
+      [
+        "电信",
+        "联通",
+        "移动"
+      ]
+    ],
+    "overflow": 0,
+    "chart": null,
     "title": "探针列表 · 探针鸡农场 · Mock",
     "models": true,
-    "pfModels": 44,
-    "shot": "./shots/nodes-desktop.png",
+    "dogs": [
+      {
+        "model": true,
+        "parentIsBody": true
+      },
+      {
+        "model": true,
+        "parentIsBody": true
+      }
+    ],
+    "dogCfg": 2,
+    "geese": 2,
+    "pfModels": 45,
+    "pfDecor": 43,
+    "pfTotal": 43,
+    "pfLog": 43,
+    "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/nodes-desktop.png",
     "problems": {
       "console": [],
       "exceptions": [],
@@ -96,9 +166,9 @@
     "ok": true,
     "body": "solo",
     "paused": true,
-    "nodes": 6,
-    "online": 4,
-    "npcs": 11,
+    "nodes": 7,
+    "online": 5,
+    "npcs": 20,
     "kinds": [
       "dog",
       "goose",
@@ -108,12 +178,35 @@
     "solo": true,
     "hudOpen": true,
     "detail": true,
-    "cards": 6,
+    "cards": 7,
     "canvases": 6,
+    "net": [],
+    "overflow": 0,
+    "chart": {
+      "cssW": 531,
+      "bmpW": 1062,
+      "dpr": 2,
+      "want": 1062
+    },
     "title": "东京 · A1 · 探针鸡农场 · Mock",
     "models": true,
-    "pfModels": 44,
-    "shot": "./shots/detail-desktop.png",
+    "dogs": [
+      {
+        "model": true,
+        "parentIsBody": true
+      },
+      {
+        "model": true,
+        "parentIsBody": true
+      }
+    ],
+    "dogCfg": 2,
+    "geese": 2,
+    "pfModels": 45,
+    "pfDecor": 43,
+    "pfTotal": 43,
+    "pfLog": 43,
+    "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/detail-desktop.png",
     "problems": {
       "console": [],
       "exceptions": [],
@@ -126,9 +219,9 @@
     "ok": true,
     "body": "solo route-farm",
     "paused": false,
-    "nodes": 6,
-    "online": 4,
-    "npcs": 11,
+    "nodes": 7,
+    "online": 5,
+    "npcs": 20,
     "kinds": [
       "dog",
       "goose",
@@ -140,10 +233,92 @@
     "detail": false,
     "cards": 0,
     "canvases": 0,
+    "net": [],
+    "overflow": 0,
+    "chart": null,
     "title": "探针鸡农场 · Mock",
     "models": true,
-    "pfModels": 44,
-    "shot": "./shots/farm-mobile.png",
+    "dogs": [
+      {
+        "model": true,
+        "parentIsBody": true
+      },
+      {
+        "model": true,
+        "parentIsBody": true
+      }
+    ],
+    "dogCfg": 2,
+    "geese": 2,
+    "pfModels": 45,
+    "pfDecor": 43,
+    "pfTotal": 43,
+    "pfLog": 43,
+    "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/farm-mobile.png",
+    "problems": {
+      "console": [],
+      "exceptions": [],
+      "http": []
+    }
+  },
+  "nodesMobile": {
+    "name": "nodes-mobile",
+    "path": "/nodes",
+    "ok": true,
+    "body": "solo",
+    "paused": true,
+    "nodes": 7,
+    "online": 5,
+    "npcs": 20,
+    "kinds": [
+      "dog",
+      "goose",
+      "probe",
+      "web"
+    ],
+    "solo": true,
+    "hudOpen": true,
+    "detail": false,
+    "cards": 7,
+    "canvases": 0,
+    "net": [
+      [
+        "电信",
+        "联通",
+        "移动"
+      ],
+      [
+        "电信",
+        "联通",
+        "移动"
+      ],
+      [
+        "电信",
+        "联通",
+        "移动"
+      ]
+    ],
+    "overflow": 0,
+    "chart": null,
+    "title": "探针列表 · 探针鸡农场 · Mock",
+    "models": true,
+    "dogs": [
+      {
+        "model": true,
+        "parentIsBody": true
+      },
+      {
+        "model": true,
+        "parentIsBody": true
+      }
+    ],
+    "dogCfg": 2,
+    "geese": 2,
+    "pfModels": 45,
+    "pfDecor": 43,
+    "pfTotal": 43,
+    "pfLog": 43,
+    "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/nodes-mobile.png",
     "problems": {
       "console": [],
       "exceptions": [],
@@ -158,9 +333,9 @@
       "ok": true,
       "body": "solo route-farm",
       "paused": false,
-      "nodes": 6,
-      "online": 4,
-      "npcs": 11,
+      "nodes": 7,
+      "online": 5,
+      "npcs": 20,
       "kinds": [
         "dog",
         "goose",
@@ -172,10 +347,28 @@
       "detail": false,
       "cards": 0,
       "canvases": 0,
+      "net": [],
+      "overflow": 0,
+      "chart": null,
       "title": "探针鸡农场 · Mock",
       "models": true,
-      "pfModels": 44,
-      "shot": "./shots/farm-desktop.png",
+      "dogs": [
+        {
+          "model": true,
+          "parentIsBody": true
+        },
+        {
+          "model": true,
+          "parentIsBody": true
+        }
+      ],
+      "dogCfg": 2,
+      "geese": 2,
+      "pfModels": 45,
+      "pfDecor": 43,
+      "pfTotal": 43,
+      "pfLog": 43,
+      "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/farm-desktop.png",
       "problems": {
         "console": [],
         "exceptions": [],
@@ -188,9 +381,9 @@
       "ok": true,
       "body": "solo route-farm",
       "paused": false,
-      "nodes": 6,
-      "online": 4,
-      "npcs": 11,
+      "nodes": 7,
+      "online": 5,
+      "npcs": 20,
       "kinds": [
         "dog",
         "goose",
@@ -202,10 +395,28 @@
       "detail": false,
       "cards": 0,
       "canvases": 0,
+      "net": [],
+      "overflow": 0,
+      "chart": null,
       "title": "探针鸡农场 · Mock",
       "models": true,
-      "pfModels": 44,
-      "shot": "./shots/farm-day.png",
+      "dogs": [
+        {
+          "model": true,
+          "parentIsBody": true
+        },
+        {
+          "model": true,
+          "parentIsBody": true
+        }
+      ],
+      "dogCfg": 2,
+      "geese": 2,
+      "pfModels": 45,
+      "pfDecor": 43,
+      "pfTotal": 43,
+      "pfLog": 43,
+      "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/farm-day.png",
       "problems": {
         "console": [],
         "exceptions": [],
@@ -218,9 +429,9 @@
       "ok": true,
       "body": "solo",
       "paused": true,
-      "nodes": 6,
-      "online": 4,
-      "npcs": 11,
+      "nodes": 7,
+      "online": 5,
+      "npcs": 20,
       "kinds": [
         "dog",
         "goose",
@@ -230,12 +441,46 @@
       "solo": true,
       "hudOpen": true,
       "detail": false,
-      "cards": 6,
+      "cards": 7,
       "canvases": 0,
+      "net": [
+        [
+          "电信",
+          "联通",
+          "移动"
+        ],
+        [
+          "电信",
+          "联通",
+          "移动"
+        ],
+        [
+          "电信",
+          "联通",
+          "移动"
+        ]
+      ],
+      "overflow": 0,
+      "chart": null,
       "title": "探针列表 · 探针鸡农场 · Mock",
       "models": true,
-      "pfModels": 44,
-      "shot": "./shots/nodes-desktop.png",
+      "dogs": [
+        {
+          "model": true,
+          "parentIsBody": true
+        },
+        {
+          "model": true,
+          "parentIsBody": true
+        }
+      ],
+      "dogCfg": 2,
+      "geese": 2,
+      "pfModels": 45,
+      "pfDecor": 43,
+      "pfTotal": 43,
+      "pfLog": 43,
+      "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/nodes-desktop.png",
       "problems": {
         "console": [],
         "exceptions": [],
@@ -248,9 +493,9 @@
       "ok": true,
       "body": "solo",
       "paused": true,
-      "nodes": 6,
-      "online": 4,
-      "npcs": 11,
+      "nodes": 7,
+      "online": 5,
+      "npcs": 20,
       "kinds": [
         "dog",
         "goose",
@@ -260,12 +505,35 @@
       "solo": true,
       "hudOpen": true,
       "detail": true,
-      "cards": 6,
+      "cards": 7,
       "canvases": 6,
+      "net": [],
+      "overflow": 0,
+      "chart": {
+        "cssW": 531,
+        "bmpW": 1062,
+        "dpr": 2,
+        "want": 1062
+      },
       "title": "东京 · A1 · 探针鸡农场 · Mock",
       "models": true,
-      "pfModels": 44,
-      "shot": "./shots/detail-desktop.png",
+      "dogs": [
+        {
+          "model": true,
+          "parentIsBody": true
+        },
+        {
+          "model": true,
+          "parentIsBody": true
+        }
+      ],
+      "dogCfg": 2,
+      "geese": 2,
+      "pfModels": 45,
+      "pfDecor": 43,
+      "pfTotal": 43,
+      "pfLog": 43,
+      "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/detail-desktop.png",
       "problems": {
         "console": [],
         "exceptions": [],
@@ -278,9 +546,9 @@
       "ok": true,
       "body": "solo route-farm",
       "paused": false,
-      "nodes": 6,
-      "online": 4,
-      "npcs": 11,
+      "nodes": 7,
+      "online": 5,
+      "npcs": 20,
       "kinds": [
         "dog",
         "goose",
@@ -292,10 +560,92 @@
       "detail": false,
       "cards": 0,
       "canvases": 0,
+      "net": [],
+      "overflow": 0,
+      "chart": null,
       "title": "探针鸡农场 · Mock",
       "models": true,
-      "pfModels": 44,
-      "shot": "./shots/farm-mobile.png",
+      "dogs": [
+        {
+          "model": true,
+          "parentIsBody": true
+        },
+        {
+          "model": true,
+          "parentIsBody": true
+        }
+      ],
+      "dogCfg": 2,
+      "geese": 2,
+      "pfModels": 45,
+      "pfDecor": 43,
+      "pfTotal": 43,
+      "pfLog": 43,
+      "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/farm-mobile.png",
+      "problems": {
+        "console": [],
+        "exceptions": [],
+        "http": []
+      }
+    },
+    {
+      "name": "nodes-mobile",
+      "path": "/nodes",
+      "ok": true,
+      "body": "solo",
+      "paused": true,
+      "nodes": 7,
+      "online": 5,
+      "npcs": 20,
+      "kinds": [
+        "dog",
+        "goose",
+        "probe",
+        "web"
+      ],
+      "solo": true,
+      "hudOpen": true,
+      "detail": false,
+      "cards": 7,
+      "canvases": 0,
+      "net": [
+        [
+          "电信",
+          "联通",
+          "移动"
+        ],
+        [
+          "电信",
+          "联通",
+          "移动"
+        ],
+        [
+          "电信",
+          "联通",
+          "移动"
+        ]
+      ],
+      "overflow": 0,
+      "chart": null,
+      "title": "探针列表 · 探针鸡农场 · Mock",
+      "models": true,
+      "dogs": [
+        {
+          "model": true,
+          "parentIsBody": true
+        },
+        {
+          "model": true,
+          "parentIsBody": true
+        }
+      ],
+      "dogCfg": 2,
+      "geese": 2,
+      "pfModels": 45,
+      "pfDecor": 43,
+      "pfTotal": 43,
+      "pfLog": 43,
+      "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/nodes-mobile.png",
       "problems": {
         "console": [],
         "exceptions": [],
@@ -327,7 +677,7 @@
         "paused": true,
         "seen": 2
       },
-      "shot": "./shots/tab-toggle.png",
+      "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/tab-toggle.png",
       "problems": {
         "console": [],
         "exceptions": [],
@@ -341,7 +691,7 @@
         "detail": false,
         "open": true
       },
-      "shot": "./shots/detail-tab-back.png",
+      "shot": "C:/Users/desup/Desktop/OH-WorkSpace/niwatori/shots/detail-tab-back.png",
       "problems": {
         "console": [],
         "exceptions": [],
@@ -349,5 +699,6 @@
       }
     }
   ],
+  "errors": [],
   "ok": true
 }

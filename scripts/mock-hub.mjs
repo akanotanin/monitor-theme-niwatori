@@ -202,6 +202,8 @@ const json = (res, body, status = 200) => {
 
 function api(req, res, pathname, query) {
   if (pathname === '/api/me') {
+    // 真 hub 关了公开页时 /api/me 回 401（theme-boot 据此渲染登录卡）；--closed 要能测到这条分支
+    if (CLOSED) return json(res, { error: 'unauthorized' }, 401);
     return json(res, {
       authed: false,
       github: false,
@@ -211,6 +213,7 @@ function api(req, res, pathname, query) {
     });
   }
   if (pathname === '/api/themes/niwatori/config') {
+    if (CLOSED) return json(res, { error: 'unauthorized' }, 401);
     return json(res, {
       showWeb: true,
       geese: THEME_GEESE,
@@ -227,11 +230,12 @@ function api(req, res, pathname, query) {
     // 慢响应：模拟「连接建好但迟迟不回包」的反代。主题必须在 8 秒后自己超时，然后还能恢复轮询。
     if (SLOW_MS > 0 && slowHits < SLOW_TIMES) {
       slowHits++;
-      return void setTimeout(() => json(res, { nodes: NODES.map(nodeView) }), SLOW_MS);
+      return void setTimeout(() => json(res, NODES.map(nodeView)), SLOW_MS);
     }
     // MOCK_429=n：前 n 次 /api/nodes 回 429，用来验证主题在站点限流时的退避重试
     if (MOCK_429 && hits429 < MOCK_429) { hits429++; return json(res, { error: 'rate limited' }, 429); }
-    return json(res, { nodes: NODES.map(nodeView) });
+    // ★ 真 hub 的 /api/nodes 是**数组**：主题的数组分支以前从没被 mock 验收过
+    return json(res, NODES.map(nodeView));
   }
   const m = pathname.match(/^\/api\/nodes\/(\d+)\/metrics$/);
   if (m) {
@@ -239,9 +243,17 @@ function api(req, res, pathname, query) {
     const id = Number(m[1]);
     if (!NODES.some((n) => n.id === id)) return json(res, { error: 'not found' }, 404);
     const hours = Math.max(1, Math.min(168, Number(query.get('hours') || 1)));
+    // 真 hub 会按 points 抽稀：这里也做一遍，别让主题的「points 参数」在 mock 上永远无效
+    const points = Math.max(10, Math.min(4000, Number(query.get('points') || 0) || 0));
+    const every = (arr) => {
+      if (!points || arr.length <= points) return arr;
+      const step = Math.ceil(arr.length / points);
+      return arr.filter((_, i) => i % step === 0);
+    };
     const ping = pingSeries(id, Math.min(hours, 24));
+    ping.ping = every(ping.ping);
     if (query.get('series') === 'ping') return json(res, ping);
-    return json(res, { metrics: loadRows(hours), ...ping });
+    return json(res, { metrics: every(loadRows(hours)), ...ping });
   }
   return json(res, { error: `mock: 没有这个接口 ${pathname}` }, 404);
 }
@@ -249,7 +261,15 @@ function api(req, res, pathname, query) {
 // ---------- 静态文件 ----------
 const indexPath = join(ROOT, 'index.html');
 async function serveStatic(res, pathname) {
-  let rel = decodeURIComponent(pathname).replace(/^\/+/, '');
+  let rel;
+  try {
+    rel = decodeURIComponent(pathname).replace(/^\/+/, '');
+  } catch {
+    // 畸形百分号编码（GET /%zz）：回 400，别让整个 mock 进程崩掉
+    res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('bad request');
+    return true;
+  }
   if (!rel || rel.endsWith('/')) rel += 'index.html';
   const full = normalize(join(ROOT, rel));
   if (!full.startsWith(normalize(ROOT))) return null;

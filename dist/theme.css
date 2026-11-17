@@ -108,5 +108,12 @@ body.is-locked #theme-footer { display: none !important; }
   #theme-footer { display: none; }            /* 底部提示条占了这条，署名在两处页面里都还有 */
 }
 
+/* 系统里开了「减少动态效果」：停掉脉冲/弹入/淡入这些装饰动画与过渡（不影响 3D 场景本身）*/
 @media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

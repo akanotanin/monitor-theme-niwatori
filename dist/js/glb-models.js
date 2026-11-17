@@ -46,5 +46,10 @@ export function loadModel(id, timeout = 8000) {
  *  重新绑定骨架 —— 克隆出来的模型会按**原始骨骼**（原点）渲染，看起来像被摆到了场地中央。 */
 export async function cloneModel(id, timeout) {
   const scene = await loadModel(id, timeout);
-  return cloneSkinned(scene);
+  const g = cloneSkinned(scene);
+  // 整棵子树都标上：几何体/材质是**与缓存共享**的，任何一处 dispose 都会连累
+  // 别的实体和下一次重建。dispose 侧（dog.js）按这个标记跳过。（只标根节点不够 ——
+  // 遍历会走到子网格，那里 userData 是空的。）
+  g.traverse((o) => { o.userData.pf = o.userData.pf || id; });
+  return g;
 }

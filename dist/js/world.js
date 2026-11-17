@@ -1454,11 +1454,10 @@ export function buildScene(renderer) {
     }
   }
   buildGardenBeds(deco);
-  // 围栏大门：两根门柱是静态的，两扇门做成可开合的 Group（走近自动推开）
+  // 围栏大门：两根门柱是静态的，两扇门常闭（场地边界 ±26，门不做出入玩法）
   const gy = groundHeight(WORLD_HALF, -2);
   deco.add('fenceTop', G.box, WORLD_HALF, gy + 0.9, -4.4, null, [0.26, 1.9, 0.26]);
   deco.add('fenceTop', G.box, WORLD_HALF, gy + 0.9, 0.4, null, [0.26, 1.9, 0.26]);
-  const gateLeaves = [];
   for (const [pivotZ, dir] of [[-4.4, 1], [0.4, -1]]) {
     const leaf = new THREE.Group();
     leaf.position.set(WORLD_HALF, gy, pivotZ + dir * 0.16);
@@ -1478,7 +1477,7 @@ export function buildScene(renderer) {
     }
     leaf.traverse((m) => { m.castShadow = true; m.receiveShadow = true; });
     scene.add(leaf);
-    gateLeaves.push({ g: leaf, dir });   // 常闭：场地边界 ±26，门开了也走不出去
+
   }
   // 向日葵（左边围栏一排 + 鸡舍旁两株）
   const flowersAt = [[-24.2, -1.0], [-23.6, 1.3], [-24.4, 3.6], [-23.8, 5.8], [-15.6, -5.4], [-14.9, 12.5]];
@@ -1910,7 +1909,7 @@ export function buildScene(renderer) {
     if (far.hub) far.hub.rotation.z += dt * 0.45;
     wheelGroup.rotation.z -= dt * 0.32;
     for (const s of spinners) s.rotation.z -= dt * 0.32;
-    // 大门：玩家走到 4.5m 内就推开，走远自动关
+    // 大门常闭：不做出入玩法（原来这里的注释声称会开合，实际没有驱动代码）
   };
 
   return {
