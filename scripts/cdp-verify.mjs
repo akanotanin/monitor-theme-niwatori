@@ -7,6 +7,7 @@
 // （本地用 scripts/mock-hub.mjs）。脚本不开浏览器 —— 浏览器由调用方起，见 README「本地开发」。
 
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { basename, relative } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const PORT = Number(process.env.CDP_PORT || 9333);
@@ -103,7 +104,9 @@ async function shot(s, name) {
   const r = await s.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   const file = `${SHOTS}/${name}.png`;
   writeFileSync(file, Buffer.from(r.data, 'base64'));
-  return file;
+  // 报告里只写仓库相对路径：绝对路径会带出本机用户名/目录结构（会被脱敏自检拦下）
+  const rel = relative(process.cwd(), file).split('\\').join('/');
+  return rel.startsWith('..') ? basename(file) : rel;
 }
 
 const results = [];
@@ -292,6 +295,11 @@ async function main() {
         && /未对访客开放|需要登录/.test(privateSite.title || '')))
 ,
   };
+  // 防御：报告里出现 Windows 用户目录就直接失败（以前 report 里带了本机路径）
+  if (/[A-Za-z]:[\\/]{1,2}Users[\\/]/.test(JSON.stringify(report))) {
+    console.error('✗ 报告里出现本机绝对路径（检查 SHOTS 与 shot() 的返回值）');
+    process.exitCode = 1;
+  }
   writeFileSync(`${SHOTS}/report.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   if (!report.ok) process.exitCode = 1;

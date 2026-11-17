@@ -24,6 +24,9 @@ const arg = (name, def) => {
 };
 const PORT = Number(arg('port', process.env.PORT || 18099));
 const CLOSED = args.includes('--closed');
+// 上游 v1.5.2 的 /api/me 恒返回 200（public_page 是个字段）；401 只出现在 nodes/config。
+// --me-401 用来单独覆盖主题的「401 → 需要登录」分支。
+const ME_401 = args.includes('--me-401');
 const MOCK_429 = Number(arg('429', process.env.MOCK_429 || 0));   // 前 n 次 /api/nodes 回 429
 let hits429 = 0;
 const THEME_SKY = arg('sky', 'auto');             // auto | day | dusk
@@ -202,12 +205,13 @@ const json = (res, body, status = 200) => {
 
 function api(req, res, pathname, query) {
   if (pathname === '/api/me') {
-    // 真 hub 关了公开页时 /api/me 回 401（theme-boot 据此渲染登录卡）；--closed 要能测到这条分支
-    if (CLOSED) return json(res, { error: 'unauthorized' }, 401);
+    // 真 hub（v1.5.2）关了公开页时 /api/me 仍是 200，只是 public_page:false；
+    // 主题的「401 → 需要登录」分支用 --me-401 单独覆盖。
+    if (ME_401) return json(res, { error: 'unauthorized' }, 401);
     return json(res, {
       authed: false,
       github: false,
-      site_name: '探针鸡农场 · Mock',
+      site_name: '示例站点',
       public_page: !CLOSED,
       history_days: 30,
     });
@@ -242,7 +246,7 @@ function api(req, res, pathname, query) {
     if (CLOSED) return json(res, { error: 'unauthorized' }, 401);
     const id = Number(m[1]);
     if (!NODES.some((n) => n.id === id)) return json(res, { error: 'not found' }, 404);
-    const hours = Math.max(1, Math.min(168, Number(query.get('hours') || 1)));
+    const hours = Math.max(1, Math.min(30 * 24, Number(query.get('hours') || 1)));   // history_days=30
     // 真 hub 会按 points 抽稀：这里也做一遍，别让主题的「points 参数」在 mock 上永远无效
     const points = Math.max(10, Math.min(4000, Number(query.get('points') || 0) || 0));
     const every = (arr) => {
@@ -302,5 +306,5 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`mock Monitor hub → http://127.0.0.1:${PORT}/  (dist: ${ROOT})`);
-  console.log(`设置：sky=${THEME_SKY} sound=${THEME_SOUND ? 'on' : 'off'}${CLOSED ? ' public_page=false' : ''}`);
+  console.log(`设置：sky=${THEME_SKY} sound=${THEME_SOUND ? 'on' : 'off'}${CLOSED ? ' public_page=false' : ''}${ME_401 ? ' /api/me=401' : ''}`);
 });

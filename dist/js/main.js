@@ -1,18 +1,18 @@
 // 总装：渲染器、第三人称操控、输入（鼠标/键盘/触屏）、NPC 数据绑定、主循环
 import * as THREE from 'three';
-import { Farm, CONF } from './data.js?v=1.0.17';
-import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.17';
-import { Chicken } from './chicken.js?v=1.0.17';
-import { Npc } from './npc.js?v=1.0.17';
-import { Goose, GOOSE } from './goose.js?v=1.0.17';
-import { Dog, DOG } from './dog.js?v=1.0.17';
-import { Hud } from './hud.js?v=1.0.17';
-import { Net } from './net.js?v=1.0.17';
-import { SoloFarm } from './solo.js?v=1.0.17';
-import { Feathers, Dust } from './feathers.js?v=1.0.17';
-import { Sfx } from './sfx.js?v=1.0.17';
-import { decorate } from './models.js?v=1.0.17';
-import * as CFG from './config.js?v=1.0.17';
+import { Farm, CONF } from './data.js?v=1.0.18';
+import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.18';
+import { Chicken } from './chicken.js?v=1.0.18';
+import { Npc } from './npc.js?v=1.0.18';
+import { Goose, GOOSE } from './goose.js?v=1.0.18';
+import { Dog, DOG } from './dog.js?v=1.0.18';
+import { Hud } from './hud.js?v=1.0.18';
+import { Net } from './net.js?v=1.0.18';
+import { SoloFarm } from './solo.js?v=1.0.18';
+import { Feathers, Dust } from './feathers.js?v=1.0.18';
+import { Sfx } from './sfx.js?v=1.0.18';
+import { decorate } from './models.js?v=1.0.18';
+import * as CFG from './config.js?v=1.0.18';
 
 const $ = (id) => document.getElementById(id);
 // 触屏笔记本的 Chrome/Edge 也常暴露 ontouchstart（但主指针仍是鼠标）：
@@ -1161,7 +1161,7 @@ function tickBody(now) {
 
   feathers.update(dt);
   dust.update(dt);
-  world.update(dt, player.pos);   // 云飘 / 风车水车转 / 栅栏门开合（纯装饰，不影响逻辑）
+  world.update(dt);               // 云飘 / 风车水车转（纯装饰，不影响逻辑）
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }

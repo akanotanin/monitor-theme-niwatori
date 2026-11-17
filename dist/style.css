@@ -303,7 +303,7 @@ body.touch #me{bottom:calc(154px + env(safe-area-inset-bottom))}
 .pfoot.pnet .net em{font-style:normal;color:#9db884;font-variant-numeric:tabular-nums}
 .pfoot.pnet .net em.warn{color:#e8a33d}
 .pfoot.pnet .net em.bad{color:#ff8f6b}
-.pfoot.pnet .net em.none{color:#8fa47a;opacity:.7}
+.pfoot.pnet .net em.none{color:#a9c08d}
 .pre{font-size:11px;color:#cbb894;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 @media (max-width:900px){

@@ -300,8 +300,10 @@ const moduleFiles = [];
   }
   if (syn.length) err(`node --check 失败：\n    ${syn.join('\n    ')}`);
   if (envFail.length) err(`无法运行 node --check（环境限制，不是代码问题）：${envFail.slice(0, 3).join('、')}`);
-  if (!missing.length && !badSpec.length && !noVer.length && !syn.length) {
+  if (!missing.length && !badSpec.length && !noVer.length && !syn.length && !envFail.length) {
     ok(`模块图 ${moduleFiles.length} 个模块、语法检查与 ?v= 全部通过`);
+  } else if (envFail.length && !missing.length && !badSpec.length && !noVer.length && !syn.length) {
+    ok(`模块图 ${moduleFiles.length} 个模块、?v= 通过；node --check 因环境限制未跑`);
   }
 }
 // ---------- 国旗：按清单集合比对 ----------

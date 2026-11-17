@@ -12,10 +12,10 @@
 <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-<link rel="stylesheet" href="./style.css?v=1.0.17">
-<link rel="stylesheet" href="./theme.css?v=1.0.17">
+<link rel="stylesheet" href="./style.css?v=1.0.18">
+<link rel="stylesheet" href="./theme.css?v=1.0.18">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }</script>
-<script type="module" src="./js/theme-boot.js?v=1.0.17"></script>
+<script type="module" src="./js/theme-boot.js?v=1.0.18"></script>
 </head>
 <body>
 <div id="app"></div>
@@ -41,14 +41,14 @@
   <div id="banner" role="status" aria-live="polite"></div>
 
   <!-- 右上啄倒榜：单机模式下换成自己的战绩（主题的 solo.js 负责喂数据） -->
-  <div id="board" class="collapsed" title="点击展开 / 收起">
+  <div id="board" class="collapsed" title="点击展开 / 收起" role="button" tabindex="0" aria-expanded="false" aria-controls="board-rows">
     <h3 id="board-title">🐔 啄倒榜</h3>
     <div id="board-rows"></div>
   </div>
 
   <div id="me">
     <div id="me-name">–</div>
-    <div id="hpbar"><div id="hpfill"></div></div>
+    <div id="hpbar" role="progressbar" aria-label="血量" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="hpfill"></div></div>
     <div id="score"></div>
   </div>
 

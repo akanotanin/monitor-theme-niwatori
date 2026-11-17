@@ -20,10 +20,23 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SKIP_DIRS = new Set(['.git', 'node_modules', 'release']);
 
 // ---------- 通用形态 ----------
+// 已知误报：命中这些形态的行不再算泄漏（example.com 这类占位符、GitHub 的 noreply 地址、图标文件名）
+const WHITELIST = [
+  /@example\.(com|org|net)\b/i,
+  /git@github\.com:/,
+  /icon@2x\./i,
+  /[\w.-]+@users\.noreply\.github\.com/i,
+  /https?:\/\/(www\.)?(github\.com|creativecommons\.org|polyfork\.dev|threejs\.org|flagcdn\.com|flagpedia\.net|komari\.wiki|nezha\.wiki)\//i,
+];
+
 const GENERIC = [
-  { name: 'Windows 用户目录', re: /[A-Za-z]:\\+Users\\+[^\\\s"']+/i },
+  // Windows 用户目录：正斜杠、反斜杠、file:/// 都要认（以前只认反斜杠，C:/Users/… 从缝里漏了）
+  { name: 'Windows 用户目录', re: /[A-Za-z]:[\\/]{1,2}Users[\\/][^\\/\s"']+/i },
+  { name: 'file:// 本机路径', re: /file:\/\/\/?[A-Za-z]:?\/?Users\//i },
+  { name: 'WSL 挂载路径', re: /\/mnt\/[a-z]\/Users\/[^\/\s"']+/i },
   { name: '服务器绝对路径', re: /(^|[\s"'(])\/(opt|var\/www|root|etc\/nginx|home\/[a-z]+)(\/|\b)/ },
   { name: '本机绝对路径', re: /(^|[\s"'(])\/(Users|home)\/[a-z0-9._-]+\//i },
+  { name: '家目录简写', re: /(^|[\s"'(])~\/[a-z0-9._-]+\//i },
   { name: '邮箱（非 noreply）', re: /\b[A-Za-z0-9._%+-]+@(?!users\.noreply\.github\.com)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i },
   { name: 'IPv4 字面量', re: /\b(?!127\.0\.0\.1\b)(?!0\.0\.0\.0\b)(?!192\.0\.2\.)(?!198\.51\.100\.)(?!203\.0\.113\.)([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\b/ },
   { name: '运维命令痕迹', re: /\b(ssh\s+-[a-zA-Z]*\s*-?[pP]\s*233|root@[a-z0-9.-]+\.[a-z]{2,}|systemctl\s+(reload|restart)\s+(nginx|caddy))\b/i },
@@ -51,9 +64,10 @@ function gitSafe(args) {
   try { return git(args); } catch { return null; }
 }
 
+const LOCAL_ONLY = new Set(['.leaklist', '.gitignore', '.gitattributes', '.DS_Store']);
 function walk(dir, prefix = '', out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
-    if (SKIP_DIRS.has(e.name)) continue;
+    if (SKIP_DIRS.has(e.name) || LOCAL_ONLY.has(e.name)) continue;
     const rel = prefix ? `${prefix}/${e.name}` : e.name;
     if (e.isDirectory()) walk(join(dir, e.name), rel, out);
     else if (e.isFile()) out.push(rel);
@@ -95,24 +109,29 @@ for (const rel of listFiles()) {
   const lines = text.split(/\r?\n/);
   for (const rule of rules) {
     for (let i = 0; i < lines.length; i++) {
-      if (rule.re.test(lines[i])) {
-        hits.push({ where: `${rel}:${i + 1}`, rule: rule.name, text: lines[i].trim().slice(0, 120) });
-        break;                       // 一条规则每个文件只报一次
-      }
+      const line = lines[i];
+      if (!rule.re.test(line)) continue;
+      if (WHITELIST.some((w) => w.test(line))) continue;     // 占位符/公开链接/图标名不算泄漏
+      hits.push({ where: `${rel}:${i + 1}`, rule: rule.name, text: line.trim().slice(0, 120) });
+      break;                       // 一条规则每个文件只报一次
     }
   }
 }
 
 // 提交信息也算「公开出去的文字」
 const allRules = [...listRules, ...GENERIC];
-const log = gitSafe(['log', '--all', '--format=%H%x09%B']);
-if (log == null) console.log('· 没有可用的 git：跳过提交信息扫描');
+// 作者/提交者邮箱也算公开信息（%B 只是正文，以前没扫 %an/%ae）
+const log = gitSafe(['log', '--all', '--format=%H%x09%an <%ae>%x09%B']);
+const commitsScanned = log != null;
+if (!commitsScanned) console.log('· 没有可用的 git：跳过提交信息扫描');
 else
 for (const block of log.split('\n\n')) {
   const [head, ...rest] = block.split('\n');
   if (!head) continue;
   const sha = head.split('\t')[0].slice(0, 8);
-  const msg = [head.split('\t')[1] || '', ...rest].join('\n');
+  const meta = head.split('\t')[1] || '';
+  const msg = [meta, ...rest].join('\n');
+  if (WHITELIST.some((w) => w.test(msg))) continue;
   for (const rule of allRules) {
     if (rule.re.test(msg)) hits.push({ where: `commit:${sha}`, rule: rule.name, text: msg.trim().split('\n')[0].slice(0, 120) });
   }
@@ -120,7 +139,8 @@ for (const block of log.split('\n\n')) {
 
 // ---------- 报告 ----------
 if (!hits.length) {
-  console.log(`· 脱敏自检：${listFiles().length} 个文件 + 全部提交信息，${allRules.length} 条判据，零命中 ✓`);
+  const filesCount = listFiles().length;
+  console.log(`· 脱敏自检：${filesCount} 个文件 + ${commitsScanned ? '全部提交信息' : '（提交信息已跳过）'}，${allRules.length} 条判据，零命中 ✓`);
   if (!existsSync(join(ROOT, '.leaklist'))) console.log('  （没找到 .leaklist，只跑了通用形态）');
   process.exit(0);
 }

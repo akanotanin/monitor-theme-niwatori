@@ -1877,7 +1877,7 @@ export function buildScene(renderer) {
   }
 
   let tt = 0;
-  const update = (dt, playerPos) => {
+  const update = (dt) => {
     tt += dt;
     for (const d of ducks) {
       d.a += dt * d.sp;

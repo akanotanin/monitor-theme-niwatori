@@ -1,8 +1,8 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
-import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.17';
-import { PROBES } from './config.js?v=1.0.17';
-import { GOOSE } from './goose.js?v=1.0.17';
-import { DOG } from './dog.js?v=1.0.17';
+import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.18';
+import { PROBES } from './config.js?v=1.0.18';
+import { GOOSE } from './goose.js?v=1.0.18';
+import { DOG } from './dog.js?v=1.0.18';
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ['#63b6ff', '#7ddc6a', '#ffd166', '#ff8f6b', '#c792ea', '#4dd0e1', '#f06292', '#aed581', '#fff176'];
@@ -16,7 +16,11 @@ export class Hud {
     // 右上啄倒榜 + 左下自身卡片（行数据由 main.js 从快照 ps/ns 里算好再喂进来）
     this.boardEl = $('board'); this.boardTitle = $('board-title'); this.boardRows = $('board-rows');
     this.meName = $('me-name'); this.hpfill = $('hpfill'); this.scoreEl = $('score');
-    this.boardEl.addEventListener('click', () => { this.collapsed = !this.collapsed; this.renderBoard(true); });
+    const toggleBoard = () => { this.collapsed = !this.collapsed; this.renderBoard(true); };
+    this.boardEl.addEventListener('click', toggleBoard);
+    this.boardEl.addEventListener('keydown', (e) => {
+      if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); toggleBoard(); }
+    });
     this.feedEl = $('feed'); this.bannerEl = $('banner');
     this.errbar = $('errbar');
     // 探针列表悬浮层：列表 + 服务器详情 + 管理后台入口都在这一个面板里（右侧详情抽屉已删）
@@ -134,6 +138,11 @@ export class Hud {
     this.plistTitle.textContent = '🖥 探针列表';
     this._plistSig = '';               // 回列表按最新数据重画
     this.renderProbes(true);
+    // 焦点回到刚才点开的那张卡（卡片是按 id 重画的，能找回同一个节点）
+    if (this._lastNodeId != null) {
+      const card = this.plistBody?.querySelector(`.pcard[data-id="${Number(this._lastNodeId)}"]`);
+      if (card) setTimeout(() => { try { card.focus({ preventScroll: true }); } catch { /* 老浏览器 */ } }, 0);
+    }
   }
   /** 重画列表。数据每 6 秒一轮，所以只在数值真变了才重建（并保住滚动位置）。 */
   renderProbes(force = false) {
@@ -173,15 +182,26 @@ export class Hud {
     this.plistBody.scrollTop = keep;
   }
 
-  showError(msg) { this.errbar.textContent = msg; this.errbar.classList.remove('hidden'); }
-  hideError() { this.errbar.classList.add('hidden'); }
+  // 只在文本真的变了才写：tick 每秒调一次 updateCounters，同一条错误会被 aria-live 反复播报
+  showError(msg) {
+    if (this.errbar.textContent !== msg) this.errbar.textContent = msg;
+    if (this.errbar.classList.contains('hidden')) this.errbar.classList.remove('hidden');
+  }
+  hideError() {
+    if (!this.errbar.classList.contains('hidden')) this.errbar.classList.add('hidden');
+  }
 
   // ---------- 自身（左下卡片：名字 / 血量 / 啄倒数）----------
   setMe(name) { if (this.meName) this.meName.textContent = name; }
   setSelfState(hp, koLeft, score = 0) {
     if (this.hpfill) {
-      this.hpfill.style.width = `${Math.max(0, Math.min(100, hp))}%`;
+      const pct = Math.max(0, Math.min(100, hp));
+      this.hpfill.style.width = `${pct}%`;
       this.hpfill.classList.toggle('low', hp <= 30);
+      const bar = this.hpfill.parentElement;
+      if (bar && bar.getAttribute('aria-valuenow') !== String(Math.round(pct))) {
+        bar.setAttribute('aria-valuenow', String(Math.round(pct)));
+      }
     }
     if (this.scoreEl) {
       // 被啄晕时这一行让位给复活倒计时（参考站同款文案）
@@ -219,6 +239,7 @@ export class Hud {
     this._boardAt = now;
     this.boardTitle.textContent = this.collapsed ? '🐔 啄倒榜' : '🐔 啄倒榜（点击收起）';
     this.boardEl.classList.toggle('collapsed', this.collapsed);
+    this.boardEl.setAttribute('aria-expanded', String(!this.collapsed));
     if (this.collapsed) return;
     // 名字来自节点名/访客名，必须转义（innerHTML 拼串）
     this.boardRows.innerHTML = top.map((r) =>
@@ -278,6 +299,7 @@ export class Hud {
     if (!this.probesOpen) this.showProbes();          // 从场地上点鸡进来：先把面板打开（顺带解锁指针）
     if (!this.probesOpen) return;
     this.view = 'detail';
+    if (target.kind === 'probe') this._lastNodeId = target.nodeId;
     this.plist.classList.add('is-detail');
     this.plistBody.classList.add('hidden');
     this.plistNote.classList.add('hidden');
@@ -295,6 +317,10 @@ export class Hud {
       else if (target.kind === 'web') await this.renderTaskDetail(target, token);
       else if (target.kind === 'goose') this.renderGooseDetail(target);
       else if (target.kind === 'dog') this.renderDogDetail(target);
+      // 详情是整块 innerHTML 重建的：读屏/键盘用户的焦点会掉到 body，交给「返回」
+      if (token === this._detailToken) {
+        setTimeout(() => { try { this.plistBack?.focus({ preventScroll: true }); } catch { /* 老浏览器 */ } }, 0);
+      }
     } catch (e) {
       // 切后台/关面板触发的 abort 不是数据错误，但要留一句可恢复的提示：
       // 以前这里直接 return，面板会永久停在「正在读探针数据…」，回到前台也不会重拉（审查 H2）。
