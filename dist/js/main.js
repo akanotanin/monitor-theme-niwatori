@@ -1,18 +1,18 @@
 // 总装：渲染器、第三人称操控、输入（鼠标/键盘/触屏）、NPC 数据绑定、主循环
 import * as THREE from 'three';
-import { Farm, CONF } from './data.js?v=1.0.18';
-import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.18';
-import { Chicken } from './chicken.js?v=1.0.18';
-import { Npc } from './npc.js?v=1.0.18';
-import { Goose, GOOSE } from './goose.js?v=1.0.18';
-import { Dog, DOG } from './dog.js?v=1.0.18';
-import { Hud } from './hud.js?v=1.0.18';
-import { Net } from './net.js?v=1.0.18';
-import { SoloFarm } from './solo.js?v=1.0.18';
-import { Feathers, Dust } from './feathers.js?v=1.0.18';
-import { Sfx } from './sfx.js?v=1.0.18';
-import { decorate } from './models.js?v=1.0.18';
-import * as CFG from './config.js?v=1.0.18';
+import { Farm, CONF } from './data.js?v=1.0.19';
+import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.19';
+import { Chicken } from './chicken.js?v=1.0.19';
+import { Npc } from './npc.js?v=1.0.19';
+import { Goose, GOOSE } from './goose.js?v=1.0.19';
+import { Dog, DOG } from './dog.js?v=1.0.19';
+import { Hud } from './hud.js?v=1.0.19';
+import { Net } from './net.js?v=1.0.19';
+import { SoloFarm } from './solo.js?v=1.0.19';
+import { Feathers, Dust } from './feathers.js?v=1.0.19';
+import { Sfx } from './sfx.js?v=1.0.19';
+import { decorate } from './models.js?v=1.0.19';
+import * as CFG from './config.js?v=1.0.19';
 
 const $ = (id) => document.getElementById(id);
 // 触屏笔记本的 Chrome/Edge 也常暴露 ontouchstart（但主指针仍是鼠标）：
@@ -1190,17 +1190,27 @@ if (THEME.multiplayer) setTimeout(() => { if (net.mode !== 'online') net.connect
 // 精细低模装饰：首帧之后再拉（不拖慢首屏）；模型始终开启。
 // 拉不到就保留 world.js 里的自建道具，静默降级。
 // ---- 首屏：精细模型到位前不显示 3D 画布（用户要求：不要先看到自建道具再被替换）----
-// 画布 opacity 在 style.css 里默认 0；模型换完（或兜底超时）再淡入，期间显示 #boot 的等待条。
+// 画布 opacity 在 style.css 里默认 0；模型换完（或兜底超时）再淡入，期间显示 #boot 的像素载入动画。
 // 模型在 models.js 被 import 时就开始下载（早于 buildScene），所以正常情况下这段等待只有几百毫秒（有缓存时几乎为零）。
 const bootEl = $('boot');
 let canvasShown = false;
 const showWorld = () => {
   if (canvasShown) return;
   canvasShown = true;
-  canvas.style.opacity = '1';
   if (bootEl) {
-    bootEl.classList.add('done');
-    setTimeout(() => bootEl.remove(), 420);
+    // 先用载入动画把 100% 那段演完（同步进度、撒羽毛、小鸡蹦），它回调里再淡出幕布
+    const doReveal = () => {
+      clearTimeout(fallback);
+      canvas.style.opacity = '1';
+      bootEl.classList.add('done');
+      setTimeout(() => bootEl.remove(), 420);
+    };
+    // 动画异常 / 回调没触发时别把访客困在幕布上（有上限，不是「到点就撤」）
+    const fallback = setTimeout(doReveal, 3200);
+    if (window.__NIWATORI_LOAD__) window.__NIWATORI_LOAD__.done(doReveal);
+    else doReveal();
+  } else {
+    canvas.style.opacity = '1';
   }
 };
 // 精细模型始终开启：模型随包分发，没有后台开关。个别模型拉不到时 decorate 会把对应自建版放出来。

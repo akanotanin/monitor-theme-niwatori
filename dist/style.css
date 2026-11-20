@@ -11,12 +11,17 @@ html,body{margin:0;height:100%;overflow:hidden;background:#9fd6ff;
 #app{position:fixed;inset:0}
 /* ⚠ 只作用于 3D 画布：写成 `canvas{}` 会把详情抽屉里的曲线画布也一起 opacity:0（用户报过「小鸡信息不显示」） */
 #app>canvas{display:block;opacity:0;transition:opacity .28s ease}
-/* 首屏等待条：精细模型到位前的过渡（不显示 3D 画布，免得先看到一批自建道具再被替换） */
-#boot{position:fixed;inset:0;z-index:15;pointer-events:none;display:flex;align-items:center;justify-content:center;
-  background:linear-gradient(#a8d8f0,#cfe9c4);color:#2f4520;font-size:15px;font-weight:700;
-  letter-spacing:.5px;transition:opacity .28s ease}
-#boot span{padding:10px 18px;border-radius:999px;background:rgba(255,255,255,.55);
-  box-shadow:0 2px 10px rgba(20,40,10,.12)}
+/* 首屏：精细模型到位前的过渡（不显示 3D 画布，免得先看到一批自建道具再被替换）
+   里面是像素载入动画（js/loading.js）：216×128 的画布 + 一行小字，玻璃层是画布自己的奶油边，
+   所以这里只铺一层渐变的底，不再画胶囊。 */
+#boot{position:fixed;inset:0;z-index:15;pointer-events:auto;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(#a8d8f0,#cfe9c4);color:#2f4520;
+  transition:opacity .28s ease}
+#boot .ld-stage{display:grid;justify-items:center;gap:10px}
+#ld-canvas{display:block;image-rendering:pixelated}
+#boot .ld-tip{margin:0;font-size:12px;font-weight:700;letter-spacing:.18em;color:#4a5c34;
+  opacity:0;transition:opacity .5s ease .2s;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+body.ld-ready #boot .ld-tip{opacity:1}
 #boot.done{opacity:0;pointer-events:none}
 .hidden{display:none !important}
 .tnum{font-variant-numeric:tabular-nums}

@@ -8,11 +8,11 @@
 //   这批模型的长边在 +z，我们的道具长边在 +x，所以需要 +90° 的朝向修正。
 
 import * as THREE from 'three';
-import { MODEL_IDS } from './model-ids.js?v=1.0.18';
-import { loadModel, cloneModel } from './glb-models.js?v=1.0.18';
+import { MODEL_IDS } from './model-ids.js?v=1.0.19';
+import { loadModel, cloneModel } from './glb-models.js?v=1.0.19';
 
 
-export const PF_VERSION = 9;   // 改这个文件时 +1，方便确认浏览器真的拿到了新代码
+export const PF_VERSION = 10;   // 改这个文件时 +1，方便确认浏览器真的拿到了新代码
 
 /** 替换自建道具：key 必须与 js/world.js 里 buildObstacles() 的 `${type}@${x},${z}` 完全一致 */
 const PLAN = [
@@ -152,13 +152,16 @@ export async function decorate(world, scene, groundHeight, opts = {}) {
       ok += 1;
       if (key) swapped.add(key);
       window.__pfLog.push([id, Math.round(performance.now() - t0)]);
-      // 首屏等待条上显示进度，让人知道在等什么（换完/失败都不再更新）
-      const el = document.querySelector('#boot span');
-      if (el) el.textContent = `🐔 正在布置农场 ${ok}/${total}`;
+      // 载入动画：每个模型到位都往前推一格（这是最真实的进度源 —— 44 个 GLB 逐个下载换装）
+      try { window.__NIWATORI_LOAD__?.count(ok, total); } catch { /* 装饰不参与主线 */ }
     } catch { /* 静默：这个道具没拉到 → 下面把它自己的自建版放回来 */ }
   }));
   // 没换上的道具：把自建版放出来（它们一开始是藏着的，见 world.js 的 buildScene）
   for (const p of PLAN) if (!swapped.has(p.key)) world.showFallback(p.key);
+  // 模型阶段到此结束：有模型拉不到时 ok < total，按计数推永远到不了顶部，
+  // 所以这里显式把这一段进度收满（「这一阶段做完了」不等于「页面可以揭幕」——
+  // 揭幕仍由 main.js 的首帧钩子决定）。
+  try { window.__NIWATORI_LOAD__?.count(1, 1); } catch { /* 装饰不参与主线 */ }
   window.__pfSwapMs = Math.round(performance.now() - t0);   // 从开始加载到全部换完的耗时（调试用）
   window.__pfModels = (window.__pfModels || 0) + ok;   // 累加：狗狗等也会往同一个全局 +1
   window.__pfDecor = ok;             // 只算 decorate 自己的数

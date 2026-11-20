@@ -4,11 +4,11 @@
     "name": "farm-desktop",
     "path": "/",
     "ok": true,
-    "body": "solo route-farm",
+    "body": "solo ld-ready route-farm",
     "paused": false,
     "nodes": 7,
     "online": 5,
-    "npcs": 20,
+    "npcs": 19,
     "kinds": [
       "dog",
       "goose",
@@ -29,15 +29,11 @@
       {
         "model": true,
         "parentIsBody": true
-      },
-      {
-        "model": true,
-        "parentIsBody": true
       }
     ],
-    "dogCfg": 2,
+    "dogCfg": 1,
     "geese": 2,
-    "pfModels": 45,
+    "pfModels": 44,
     "pfDecor": 43,
     "pfTotal": 43,
     "pfLog": 43,
@@ -52,11 +48,11 @@
     "name": "farm-day",
     "path": "/",
     "ok": true,
-    "body": "solo route-farm",
+    "body": "solo ld-ready route-farm",
     "paused": false,
     "nodes": 7,
     "online": 5,
-    "npcs": 20,
+    "npcs": 19,
     "kinds": [
       "dog",
       "goose",
@@ -77,15 +73,11 @@
       {
         "model": true,
         "parentIsBody": true
-      },
-      {
-        "model": true,
-        "parentIsBody": true
       }
     ],
-    "dogCfg": 2,
+    "dogCfg": 1,
     "geese": 2,
-    "pfModels": 45,
+    "pfModels": 44,
     "pfDecor": 43,
     "pfTotal": 43,
     "pfLog": 43,
@@ -100,11 +92,11 @@
     "name": "nodes-desktop",
     "path": "/nodes",
     "ok": true,
-    "body": "solo",
+    "body": "solo ld-ready",
     "paused": true,
     "nodes": 7,
     "online": 5,
-    "npcs": 20,
+    "npcs": 19,
     "kinds": [
       "dog",
       "goose",
@@ -141,15 +133,11 @@
       {
         "model": true,
         "parentIsBody": true
-      },
-      {
-        "model": true,
-        "parentIsBody": true
       }
     ],
-    "dogCfg": 2,
+    "dogCfg": 1,
     "geese": 2,
-    "pfModels": 45,
+    "pfModels": 44,
     "pfDecor": 43,
     "pfTotal": 43,
     "pfLog": 43,
@@ -164,11 +152,11 @@
     "name": "detail-desktop",
     "path": "/node/1",
     "ok": true,
-    "body": "solo",
+    "body": "solo ld-ready",
     "paused": true,
     "nodes": 7,
     "online": 5,
-    "npcs": 20,
+    "npcs": 19,
     "kinds": [
       "dog",
       "goose",
@@ -183,10 +171,10 @@
     "net": [],
     "overflow": 0,
     "chart": {
-      "cssW": 531,
-      "bmpW": 1062,
+      "cssW": 536,
+      "bmpW": 1072,
       "dpr": 2,
-      "want": 1062
+      "want": 1072
     },
     "title": "东京 · A1 · 示例站点",
     "models": true,
@@ -194,15 +182,11 @@
       {
         "model": true,
         "parentIsBody": true
-      },
-      {
-        "model": true,
-        "parentIsBody": true
       }
     ],
-    "dogCfg": 2,
+    "dogCfg": 1,
     "geese": 2,
-    "pfModels": 45,
+    "pfModels": 44,
     "pfDecor": 43,
     "pfTotal": 43,
     "pfLog": 43,
@@ -217,11 +201,11 @@
     "name": "farm-mobile",
     "path": "/",
     "ok": true,
-    "body": "solo route-farm",
+    "body": "solo route-farm ld-ready",
     "paused": false,
     "nodes": 7,
     "online": 5,
-    "npcs": 20,
+    "npcs": 19,
     "kinds": [
       "dog",
       "goose",
@@ -242,15 +226,11 @@
       {
         "model": true,
         "parentIsBody": true
-      },
-      {
-        "model": true,
-        "parentIsBody": true
       }
     ],
-    "dogCfg": 2,
+    "dogCfg": 1,
     "geese": 2,
-    "pfModels": 45,
+    "pfModels": 44,
     "pfDecor": 43,
     "pfTotal": 43,
     "pfLog": 43,
@@ -265,11 +245,11 @@
     "name": "nodes-mobile",
     "path": "/nodes",
     "ok": true,
-    "body": "solo",
+    "body": "solo ld-ready",
     "paused": true,
     "nodes": 7,
     "online": 5,
-    "npcs": 20,
+    "npcs": 19,
     "kinds": [
       "dog",
       "goose",
@@ -306,15 +286,11 @@
       {
         "model": true,
         "parentIsBody": true
-      },
-      {
-        "model": true,
-        "parentIsBody": true
       }
     ],
-    "dogCfg": 2,
+    "dogCfg": 1,
     "geese": 2,
-    "pfModels": 45,
+    "pfModels": 44,
     "pfDecor": 43,
     "pfTotal": 43,
     "pfLog": 43,
@@ -331,11 +307,11 @@
       "name": "farm-desktop",
       "path": "/",
       "ok": true,
-      "body": "solo route-farm",
+      "body": "solo ld-ready route-farm",
       "paused": false,
       "nodes": 7,
       "online": 5,
-      "npcs": 20,
+      "npcs": 19,
       "kinds": [
         "dog",
         "goose",
@@ -356,15 +332,11 @@
         {
           "model": true,
           "parentIsBody": true
-        },
-        {
-          "model": true,
-          "parentIsBody": true
         }
       ],
-      "dogCfg": 2,
+      "dogCfg": 1,
       "geese": 2,
-      "pfModels": 45,
+      "pfModels": 44,
       "pfDecor": 43,
       "pfTotal": 43,
       "pfLog": 43,
@@ -379,11 +351,11 @@
       "name": "farm-day",
       "path": "/",
       "ok": true,
-      "body": "solo route-farm",
+      "body": "solo ld-ready route-farm",
       "paused": false,
       "nodes": 7,
       "online": 5,
-      "npcs": 20,
+      "npcs": 19,
       "kinds": [
         "dog",
         "goose",
@@ -404,15 +376,11 @@
         {
           "model": true,
           "parentIsBody": true
-        },
-        {
-          "model": true,
-          "parentIsBody": true
         }
       ],
-      "dogCfg": 2,
+      "dogCfg": 1,
       "geese": 2,
-      "pfModels": 45,
+      "pfModels": 44,
       "pfDecor": 43,
       "pfTotal": 43,
       "pfLog": 43,
@@ -427,11 +395,11 @@
       "name": "nodes-desktop",
       "path": "/nodes",
       "ok": true,
-      "body": "solo",
+      "body": "solo ld-ready",
       "paused": true,
       "nodes": 7,
       "online": 5,
-      "npcs": 20,
+      "npcs": 19,
       "kinds": [
         "dog",
         "goose",
@@ -468,15 +436,11 @@
         {
           "model": true,
           "parentIsBody": true
-        },
-        {
-          "model": true,
-          "parentIsBody": true
         }
       ],
-      "dogCfg": 2,
+      "dogCfg": 1,
       "geese": 2,
-      "pfModels": 45,
+      "pfModels": 44,
       "pfDecor": 43,
       "pfTotal": 43,
       "pfLog": 43,
@@ -491,11 +455,11 @@
       "name": "detail-desktop",
       "path": "/node/1",
       "ok": true,
-      "body": "solo",
+      "body": "solo ld-ready",
       "paused": true,
       "nodes": 7,
       "online": 5,
-      "npcs": 20,
+      "npcs": 19,
       "kinds": [
         "dog",
         "goose",
@@ -510,10 +474,10 @@
       "net": [],
       "overflow": 0,
       "chart": {
-        "cssW": 531,
-        "bmpW": 1062,
+        "cssW": 536,
+        "bmpW": 1072,
         "dpr": 2,
-        "want": 1062
+        "want": 1072
       },
       "title": "东京 · A1 · 示例站点",
       "models": true,
@@ -521,15 +485,11 @@
         {
           "model": true,
           "parentIsBody": true
-        },
-        {
-          "model": true,
-          "parentIsBody": true
         }
       ],
-      "dogCfg": 2,
+      "dogCfg": 1,
       "geese": 2,
-      "pfModels": 45,
+      "pfModels": 44,
       "pfDecor": 43,
       "pfTotal": 43,
       "pfLog": 43,
@@ -544,11 +504,11 @@
       "name": "farm-mobile",
       "path": "/",
       "ok": true,
-      "body": "solo route-farm",
+      "body": "solo route-farm ld-ready",
       "paused": false,
       "nodes": 7,
       "online": 5,
-      "npcs": 20,
+      "npcs": 19,
       "kinds": [
         "dog",
         "goose",
@@ -569,15 +529,11 @@
         {
           "model": true,
           "parentIsBody": true
-        },
-        {
-          "model": true,
-          "parentIsBody": true
         }
       ],
-      "dogCfg": 2,
+      "dogCfg": 1,
       "geese": 2,
-      "pfModels": 45,
+      "pfModels": 44,
       "pfDecor": 43,
       "pfTotal": 43,
       "pfLog": 43,
@@ -592,11 +548,11 @@
       "name": "nodes-mobile",
       "path": "/nodes",
       "ok": true,
-      "body": "solo",
+      "body": "solo ld-ready",
       "paused": true,
       "nodes": 7,
       "online": 5,
-      "npcs": 20,
+      "npcs": 19,
       "kinds": [
         "dog",
         "goose",
@@ -633,15 +589,11 @@
         {
           "model": true,
           "parentIsBody": true
-        },
-        {
-          "model": true,
-          "parentIsBody": true
         }
       ],
-      "dogCfg": 2,
+      "dogCfg": 1,
       "geese": 2,
-      "pfModels": 45,
+      "pfModels": 44,
       "pfDecor": 43,
       "pfTotal": 43,
       "pfLog": 43,
@@ -669,7 +621,7 @@
         "path": "/",
         "open": false,
         "paused": false,
-        "body": "solo route-farm"
+        "body": "solo ld-ready route-farm"
       },
       "back": {
         "path": "/nodes",

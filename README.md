@@ -12,6 +12,7 @@
 - 离线 / 无数据卡片沉底；列表与详情的滚动条统一成悬浮窗同款细玻璃条
 - 曲线浮框跟随鼠标，靠近卡片边缘会自动翻转
 - 农场道具为精细低模（GLB，CC BY 4.0），随包分发、始终开启
+- **像素载入动画**：首屏不是干等一条提示 —— 像素胶囊里小鸡一趟趟搬稻草，鸡舍按**真实加载进度**一层层搭起来（石基 → 木构架 → 红墙板 → 门楣门洞 → 三段铺瓦 → 开窗 → 点灯 → 挂彩旗），草垛、栅栏、水井、野花跟着冒出来；100% 时门洞透暖光、屋檐彩旗挂满、邻居小鸡跑来，幕布才淡出。点击画布上的小鸡它会跳一下
 - 只读同源 Monitor 公开接口，没有第三方运行时请求
 
 ## 安装
@@ -19,7 +20,7 @@
 需要 **Monitor hub 1.5.2+**（已在 v1.5.2 上实测：`/api/me`、`/api/nodes`、`/api/nodes/{id}/metrics`、
 `/api/themes/<short>/config`、主题安装与 SPA 回退都在这个版本里）。
 
-1. 从 [Releases](https://github.com/akanotanin/monitor-theme-niwatori/releases) 下载 `monitor-theme-niwatori-1.0.18.tar.gz`
+1. 从 [Releases](https://github.com/akanotanin/monitor-theme-niwatori/releases) 下载 `monitor-theme-niwatori-1.0.19.tar.gz`
 2. 后台 → 主题 → 上传 tar.gz
 3. 可选设置：网站鸡、大白鹅/看门狗数量、暴躁鸡阈值、光照、音效
 
@@ -28,11 +29,12 @@
 ## 本地开发
 
 ```bash
-npm run check      # 静态自检（配置、资源、模型、署名）+ 脱敏自检
-npm run check:leaks # 只跑脱敏自检（读本机 .leaklist，可选；不提交）
-npm run mock       # http://127.0.0.1:18099
-npm run verify     # 需要 Chrome 开着 --remote-debugging-port=9333（Node 22+：脚本用全局 WebSocket）
-npm run package    # release/*.tar.gz
+npm run check        # 静态自检（配置、资源、模型、署名）+ 脱敏自检
+npm run check:leaks  # 只跑脱敏自检（读本机 .leaklist，可选；不提交）
+npm run mock         # http://127.0.0.1:18099
+npm run verify       # 需要 Chrome 开着 --remote-debugging-port=9333（Node 22+：脚本用全局 WebSocket）
+npm run check:loading # 载入动画专项（11 项）；需要再起一个静态服务供 tools/ld-preview.html
+npm run package      # release/*.tar.gz
 ```
 
 脱敏自检（`scripts/check-leaks.mjs`）会扫工作区与全部提交信息，查本机绝对路径、非 noreply 邮箱、IPv4、
@@ -41,8 +43,9 @@ npm run package    # release/*.tar.gz
 Chrome 示例：
 
 ```bash
-chrome --headless=new --enable-unsafe-swiftshader \
-       --remote-debugging-port=9333 --user-data-dir=/tmp/chrome-niwatori about:blank
+# ★ 不要加 --use-angle=swiftshader：本机实测它会让 Page.captureScreenshot 随机卡死 30s+，
+#   表现为 cdp-verify 打到截图那步就 "CDP timeout"。默认 GPU 路径反而稳。
+chrome --headless=new --remote-debugging-port=9333 --user-data-dir=/tmp/chrome-niwatori about:blank
 ```
 
 ## 结构

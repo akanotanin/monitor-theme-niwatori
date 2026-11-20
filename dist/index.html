@@ -12,16 +12,23 @@
 <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-<link rel="stylesheet" href="./style.css?v=1.0.18">
-<link rel="stylesheet" href="./theme.css?v=1.0.18">
+<link rel="stylesheet" href="./style.css?v=1.0.19">
+<link rel="stylesheet" href="./theme.css?v=1.0.19">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }</script>
-<script type="module" src="./js/theme-boot.js?v=1.0.18"></script>
+<script type="module" src="./js/theme-boot.js?v=1.0.19"></script>
 </head>
 <body>
 <div id="app"></div>
 
-<!-- 首屏：3D 画布淡入前先显示这块（主模块里 showWorld 会把它收掉） -->
-<div id="boot"><span>🐔 正在布置农场…</span></div>
+<!-- 首屏：3D 画布淡入前先显示这块（主模块里 showWorld 会把它收掉）
+     内容是像素载入动画（js/loading.js），原来那行「🐔 正在布置农场…」的胶囊提示条
+     保留了同一个元素 #boot，只是里面换成一颗 216×128 的画布 + 一行小字。 -->
+<div id="boot">
+  <div class="ld-stage">
+    <canvas id="ld-canvas" width="216" height="128"></canvas>
+    <p class="ld-tip">农场正在搭起来 …</p>
+  </div>
+</div>
 
 <!-- HUD -->
 <div id="hud">

@@ -11,6 +11,44 @@
 
 const SHORT = 'niwatori';
 
+/* ------------------------------------------------------------------ *
+ * 载入动画（js/loading.js）先起：纯 canvas、零依赖，必须早于 three 的模块图。
+ * 它接管的元素是 #boot（原来那行提示条），进度用真实等待节点：
+ *   0.08 起步 → 0.30 两个接口回来 → 0.30..0.86 由 44 个 GLB 逐个到位推进 → 1.0 首帧
+ * 动画没起来（老浏览器 / 模块异常）时下面所有调用都是空操作，不影响主流程。
+ * ------------------------------------------------------------------ */
+let load = null;
+// 浏览器里才启动；Node 里（scripts/check.mjs 会 import 这个模块核对默认值）没有 document
+if (typeof document !== 'undefined') {
+  try {
+    // ★ 用 await import 会等模块图，但它只有一个文件、没有依赖，实际只多一次往返
+    const mod = await import('./loading.js?v=1.0.19');
+    load = mod.mount();
+  } catch (err) {
+    console.warn('[niwatori] 载入动画未启动', err);
+  }
+}
+/** 真实进度落点（0..1）；动画没起来时静默跳过 */
+const step = (v) => { try { load?.set(v); } catch { /* 装饰不参与主线 */ } };
+/** 模型计数 → 进度条细粒度推进 */
+const count = (ok, total, base, span) => { try { load?.count(ok, total, base, span); } catch { /* 同上 */ } };
+/** 首帧就绪：让动画把 100% 那段演完再揭幕 */
+const finish = (cb) => { try { load ? load.done(cb) : cb?.(); } catch { cb?.(); } };
+
+/**
+ * 手动收幕布：只在「没有 showWorld 来揭幕」的两条路径上用
+ * （站点锁屏 / main.js 加载失败）。正常路径由 main.js 的 showWorld 揭幕。
+ */
+const dropCurtain = () => {
+  const b = document.getElementById('boot');
+  if (!b) return;
+  b.classList.add('done');
+  setTimeout(() => b.remove(), 420);
+};
+
+step(0.08);
+setTimeout(() => { try { document.body.classList.add('ld-ready'); } catch { /* 纯装饰 */ } }, 700);
+
 const DEFAULTS = {
   showWeb: true,
   geese: 2,
@@ -108,6 +146,7 @@ async function start() {
   try {
     settings = pickSettings(await getJSON(`/api/themes/${SHORT}/config`));
   } catch { /* 取不到就用默认值 */ }
+  step(0.22);
 
   let me = null;
   let meStatus = 0;
@@ -116,6 +155,7 @@ async function start() {
   } catch (e) {
     meStatus = Number(e.status) || 0;
   }
+  step(0.30);
 
   const siteName = String((me && me.site_name) || '').trim();
   const publicPage = !me || me.public_page !== false;
@@ -146,6 +186,7 @@ async function start() {
 
   // 站点把公开状态页关了：没登录就只给登录入口（hub 的公开接口这会儿本来也是 401）。
   if (!publicPage && !authed) {
+    finish(dropCurtain);                         // 锁屏要盖在农场幕布之上：先把幕布收掉
     lockScreen({
       title: '状态页未对访客开放',
       body: '站点已关闭公开状态页，请先登录后再查看服务器状态。',
@@ -154,6 +195,7 @@ async function start() {
     return;
   }
   if (!me && meStatus === 401) {
+    finish(dropCurtain);
     lockScreen({
       title: '需要登录',
       body: '这个站点只对已登录的访客开放，请先登录。',
@@ -167,7 +209,7 @@ async function start() {
 
   // 主题文件在升级瞬间可能还没全部就位（或 CDN 缓存了短暂 404）：
   // 动态 import 重试 3 次；theme-shell 失败不锁农场，避免「农场没启动」整页报错。
-  const V = '1.0.18';
+  const V = '1.0.19';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   async function load(path, tries = 3) {
     let last;
@@ -189,12 +231,15 @@ async function start() {
     const msg = String((e && e.message) || e);
     // Three.js r169 只支持 WebGL2：把「没有上下文」翻成能照着做的提示，别只甩一行英文。
     const noGL = /webgl/i.test(msg);
-    lockScreen({
-      title: noGL ? '这台浏览器没有可用的 WebGL2' : '农场没有启动',
-      body: noGL
-        ? '主题的 3D 农场需要 WebGL2。请先开启浏览器的「使用图形加速功能」并重启，更新显卡驱动，或换用最新版 Chrome / Edge；远程桌面或虚拟机请在宿主机启用 GPU。地址栏打开 chrome://gpu（Edge 为 edge://gpu）可查看 WebGL 状态。'
-        : `浏览器没能加载 3D 场景。${msg}`,
-      login: false,
+    finish(() => {                              // 先演完收尾再上锁屏，别让两层面板叠在一起
+      dropCurtain();
+      lockScreen({
+        title: noGL ? '这台浏览器没有可用的 WebGL2' : '农场没有启动',
+        body: noGL
+          ? '主题的 3D 农场需要 WebGL2。请先开启浏览器的「使用图形加速功能」并重启，更新显卡驱动，或换用最新版 Chrome / Edge；远程桌面或虚拟机请在宿主机启用 GPU。地址栏打开 chrome://gpu（Edge 为 edge://gpu）可查看 WebGL 状态。'
+          : `浏览器没能加载 3D 场景。${msg}`,
+        login: false,
+      });
     });
     return;
   }

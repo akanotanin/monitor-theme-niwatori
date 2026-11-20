@@ -8,7 +8,7 @@
 // 并且把模型挂在 `chicken` 上：main.js 里那些 npc.chicken.* 的老路径（射线点选、羽毛颜色、
 // 名牌远处淡出、手机上放大点击球）不用改就能用。
 import * as THREE from 'three';
-import { sample, push } from './interp.js?v=1.0.18';
+import { sample, push } from './interp.js?v=1.0.19';
 
 // 与联机服（server/farm_server.py，不在本仓库）的 GOOSE_* 必须一致——
 // 客户端只在"详情卡片给玩家看的说明文字"里用它们，判定全在服务端。

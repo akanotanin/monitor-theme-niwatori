@@ -1,8 +1,8 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
-import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.18';
-import { PROBES } from './config.js?v=1.0.18';
-import { GOOSE } from './goose.js?v=1.0.18';
-import { DOG } from './dog.js?v=1.0.18';
+import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.19';
+import { PROBES } from './config.js?v=1.0.19';
+import { GOOSE } from './goose.js?v=1.0.19';
+import { DOG } from './dog.js?v=1.0.19';
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ['#63b6ff', '#7ddc6a', '#ffd166', '#ff8f6b', '#c792ea', '#4dd0e1', '#f06292', '#aed581', '#fff176'];

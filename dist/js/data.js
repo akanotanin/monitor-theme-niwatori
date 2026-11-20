@@ -2,9 +2,9 @@
 // 默认后端是 monitor hub；config.js 的 SOURCE === 'komari' 时字段映射走 js/komari.js（Komari
 // 的公开 API 与 monitor 不同，但映射后聚合/暴躁鸡/详情图都不用改）。
 // 页面路径形如 /chicken/，同源反代把 /chicken/api/* 转到后端的 /api/*（见 nginx 站点块）。
-import * as CFG from './config.js?v=1.0.18';
-import * as Komari from './komari.js?v=1.0.18';
-import * as Nezha from './nezha.js?v=1.0.18';
+import * as CFG from './config.js?v=1.0.19';
+import * as Komari from './komari.js?v=1.0.19';
+import * as Nezha from './nezha.js?v=1.0.19';
 
 // index.html 直开（file:// 或 /themes/x/dist/）也要落到它所在的目录，不是 index.html/api/
 const API = new URL('./api/', document.baseURI.replace(/[^/]*$/, '')).href;

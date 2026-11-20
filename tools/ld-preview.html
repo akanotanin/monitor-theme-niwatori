@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>载入动画预览 · niwatori</title>
+<style>
+  html, body { margin: 0; height: 100%; background: linear-gradient(#a8d8f0, #cfe9c4); }
+  body { display: grid; place-items: center; }
+  #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #boot .ld-stage { display: grid; justify-items: center; gap: 10px; }
+  #ld-canvas { display: block; image-rendering: pixelated; }
+  #boot .ld-tip { margin: 0; font: 700 12px/1.4 "Microsoft YaHei", system-ui, sans-serif;
+    letter-spacing: .18em; color: #4a5c34; }
+</style>
+</head>
+<body>
+  <div id="boot">
+    <div class="ld-stage">
+      <canvas id="ld-canvas" width="216" height="128"></canvas>
+      <p class="ld-tip">农场正在搭起来 …</p>
+    </div>
+  </div>
+  <script type="module">
+    /**
+     * 载入动画的独立预览页（只给开发/验收用，不进发布包）。
+     *   ?p=0.55           固定进度（不揭幕，方便逐帧截图）
+     *   ?p=0.99&done=1    演完 100% 的收尾（撒羽毛 + 邻居小鸡跑来）
+     *   ?auto=1           模拟一次真实加载：0.08 → 计数推进 → done()
+     */
+    import { mount } from '../dist/js/loading.js';
+    const api = mount();
+    window.__L__ = api;
+    const q = new URLSearchParams(location.search);
+    if (q.has('p')) api.set(Number(q.get('p')));
+    if (q.has('done')) setTimeout(() => api.done(() => {}), 200);
+    if (q.has('auto')) {
+      const t0 = performance.now();
+      let i = 0;
+      const total = 43;
+      const tick = () => {
+        const t = (performance.now() - t0) / 1000;
+        if (t < 1.1) api.set(0.08 + t * 0.2);
+        else if (i < total) { i += 2; api.count(Math.min(i, total), total); }
+        if (t >= 4.4) { api.done(() => {}); return; }
+        requestAnimationFrame(tick);
+      };
+      tick();
+    }
+  </script>
+</body>
+</html>
