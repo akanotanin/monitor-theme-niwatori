@@ -1,10 +1,10 @@
 // NPC 鸡：探针鸡（VPS）与网站鸡（ping 探测）的行为 —— 闲逛、暴躁追人、被啄倒
 import * as THREE from 'three';
-import { Chicken } from './chicken.js?v=1.0.20';
-import { resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.20';
-import { sample, push } from './interp.js?v=1.0.20';
-import { CONF, fmtRate, fmtPct, fmtUptime, shortCpu, seenAgo } from './data.js?v=1.0.20';
-import { PROBES } from './config.js?v=1.0.20';
+import { Chicken } from './chicken.js?v=1.0.21';
+import { resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.21';
+import { sample, push } from './interp.js?v=1.0.21';
+import { CONF, fmtRate, fmtPct, fmtUptime, shortCpu, seenAgo } from './data.js?v=1.0.21';
+import { PROBES } from './config.js?v=1.0.21';
 
 const PASTEL = [];   // 已废弃：改用 chicken.js 的 5 套写实羽色（保留常量以免外部引用报错）
 

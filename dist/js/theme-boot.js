@@ -22,7 +22,7 @@ let load = null;
 if (typeof document !== 'undefined') {
   try {
     // ★ 用 await import 会等模块图，但它只有一个文件、没有依赖，实际只多一次往返
-    const mod = await import('./loading.js?v=1.0.20');
+    const mod = await import('./loading.js?v=1.0.21');
     load = mod.mount();
   } catch (err) {
     console.warn('[niwatori] 载入动画未启动', err);
@@ -151,20 +151,24 @@ function lockScreen({ title, body, login }) {
 }
 
 async function start() {
-  // 站点级设置：hub 没存过 / 老 hub 没有这个接口，都回落默认值（公开页照常渲染）。
+  // ★ 两次请求并行：它们互不依赖（config 给玩法设置、me 给站名与锁屏判断），
+  //   串行时弱网下单是超时预算就要 5s + 5s = 10s，而 loading.js 的进度只允许单调上升 ——
+  //   这 10 秒里进度条会冻在 22%~30%（模型还没开始下），看着像卡死。
+  //   用 allSettled：任一失败都按原口径回落（config → 默认值，me → 未登录）。
+  const [cfgRes, meRes] = await Promise.allSettled([
+    getJSON(`/api/themes/${SHORT}/config`),
+    getJSON('/api/me'),
+  ]);
   let settings = { ...DEFAULTS };
-  try {
-    settings = pickSettings(await getJSON(`/api/themes/${SHORT}/config`));
-  } catch { /* 取不到就用默认值 */ }
+  if (cfgRes.status === 'fulfilled') {
+    try { settings = pickSettings(cfgRes.value); } catch { /* 坏 JSON → 默认值 */ }
+  }
   step(0.22);
 
   let me = null;
   let meStatus = 0;
-  try {
-    me = await getJSON('/api/me');
-  } catch (e) {
-    meStatus = Number(e.status) || 0;
-  }
+  if (meRes.status === 'fulfilled') me = meRes.value;
+  else meStatus = Number(meRes.reason && meRes.reason.status) || 0;
   step(0.30);
 
   const siteName = String((me && me.site_name) || '').trim();
@@ -219,7 +223,7 @@ async function start() {
 
   // 主题文件在升级瞬间可能还没全部就位（或 CDN 缓存了短暂 404）：
   // 动态 import 重试 3 次；theme-shell 失败不锁农场，避免「农场没启动」整页报错。
-  const V = '1.0.20';
+  const V = '1.0.21';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   async function load(path, tries = 3) {
     let last;

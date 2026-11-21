@@ -1,18 +1,18 @@
 // 总装：渲染器、第三人称操控、输入（鼠标/键盘/触屏）、NPC 数据绑定、主循环
 import * as THREE from 'three';
-import { Farm, CONF } from './data.js?v=1.0.20';
-import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.20';
-import { Chicken } from './chicken.js?v=1.0.20';
-import { Npc } from './npc.js?v=1.0.20';
-import { Goose, GOOSE } from './goose.js?v=1.0.20';
-import { Dog, DOG } from './dog.js?v=1.0.20';
-import { Hud } from './hud.js?v=1.0.20';
-import { Net } from './net.js?v=1.0.20';
-import { SoloFarm } from './solo.js?v=1.0.20';
-import { Feathers, Dust } from './feathers.js?v=1.0.20';
-import { Sfx } from './sfx.js?v=1.0.20';
-import { decorate } from './models.js?v=1.0.20';
-import * as CFG from './config.js?v=1.0.20';
+import { Farm, CONF } from './data.js?v=1.0.21';
+import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.21';
+import { Chicken } from './chicken.js?v=1.0.21';
+import { Npc } from './npc.js?v=1.0.21';
+import { Goose, GOOSE } from './goose.js?v=1.0.21';
+import { Dog, DOG } from './dog.js?v=1.0.21';
+import { Hud } from './hud.js?v=1.0.21';
+import { Net } from './net.js?v=1.0.21';
+import { SoloFarm } from './solo.js?v=1.0.21';
+import { Feathers, Dust } from './feathers.js?v=1.0.21';
+import { Sfx } from './sfx.js?v=1.0.21';
+import { decorate } from './models.js?v=1.0.21';
+import * as CFG from './config.js?v=1.0.21';
 
 const $ = (id) => document.getElementById(id);
 // 触屏笔记本的 Chrome/Edge 也常暴露 ontouchstart（但主指针仍是鼠标）：
@@ -304,13 +304,26 @@ addEventListener('keydown', (e) => {
   if (e.code === 'Tab') { e.preventDefault(); hud.toggleProbes(); }
   // ⚠ 面板开着时不要先写 keys：以前 keys[e.code]=true 在 return 之前，WASD 会在面板
   //   背后继续移动；开面板时按下的键也不会被后续 keyup 清掉（子代理复审）。
+  // ★ 但「焦点在控件上」时要放行 Space/Enter：否则面板里的按钮（关闭、卡片、后台链接）
+  //   用空格激活不了 —— 浏览器靠 keydown 未被取消来决定要不要发 click。
+  const onCtlEarly = e.target instanceof Element
+    && !!e.target.closest('button, a[href], input, select, textarea, [role="button"], [contenteditable]');
   if (hud.probesOpen && e.code !== 'KeyM') {
-    if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+    if (!(onCtlEarly && e.code === 'Space') && (e.code === 'Space' || e.code.startsWith('Arrow'))) e.preventDefault();
     return;
   }
+  // 焦点是否在真正的交互控件上（按钮/链接/输入框…）。
+  // ★ Chrome 的按钮空格激活发生在 keyup 且依赖 keydown 未被取消：
+  //   全局 preventDefault 会让「Tab 到按钮 → 按空格」完全没反应；
+  //   反过来，焦点在按钮上时把 Space 记成「跳」又会让角色跟着起跳。
+  //   所以判断要放在**写 keys 之前**（以前写在后面，keys['Space'] 已经置 true 了）。
+  const onCtl = e.target instanceof Element
+    && !!e.target.closest('button, a[href], input, select, textarea, [role="button"], [contenteditable]');
+  if (onCtl && e.code === 'Space') return;          // 交给按钮：不记录、不 preventDefault
   keys[e.code] = true;
-  // 空格/方向键的默认行为压掉：点过 🖥 之后焦点还在按钮上，空格会在 keyup 补一次 click（把面板关掉）
+  // 空格/方向键的默认行为压掉：游戏里空格是跳、方向键是走，不能滚动页面。
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+  // M（静音）/ F（啄击）/ L（光照）与焦点无关，照旧
   if (e.code === 'KeyM') hud.banner(sfx.toggleMute() ? '🔇 已静音' : '🔊 声音开启', 900);
   if (e.code === 'KeyF') doPeck();
   if (e.code === 'KeyL') {

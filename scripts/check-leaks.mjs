@@ -47,7 +47,9 @@ const GENERIC = [
   //   在 JSON.stringify 的真实产物 `C:\\Users\\alice\\x` 上会失配 ——
   //   Users 后的第一个反斜杠被 [\\/] 吃掉，第二个被 [^\\/] 拒绝，整条不匹配。
   //   而 .json（package.json / theme.json / manifest.json / fixtures）恰恰最容易夹带本机路径。
-  { name: 'Windows 用户目录', re: /[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"']+/i },
+  // ★ 必须要求盘符后紧跟分隔符（`:\\` 或 `:/`）：否则 `.../@users.noreply.github.com` 这种
+  //   邮箱里的 "s/Users" 也会被当成 C:/Users（提交信息里每个 noreply 邮箱都会误报）。
+  { name: 'Windows 用户目录', re: /[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"']+/i, skip: (line, at) => /@[\w.-]*$/.test(line.slice(Math.max(0, at - 40), at)) },
   { name: 'file:// 本机路径', re: /file:\/\/\/?[A-Za-z]:?\/?(Users|home)\/[^\/\s"']+/i },
   { name: 'WSL 挂载路径', re: /\/mnt\/[a-z]\/(Users|home)\/[^\/\s"']+/i },
   { name: 'Windows 其它盘符路径', re: /(^|[\s"'(])[D-Zd-z]:[\\/]+[^\s"':]{3,}/ },
@@ -183,7 +185,11 @@ for (const block of log.split(RS)) {
   // 片段级白名单（同文件扫描）：一条提交里出现公开链接，不能连带豁免同一段里的内网 IP
   const masked = maskWhitelist(msg);
   for (const rule of allRules) {
-    if (ruleHit(rule, masked)) hits.push({ where: `commit:${sha}`, rule: rule.name, text: msg.trim().split('\n')[0].slice(0, 120) });
+    if (!ruleHit(rule, masked)) continue;
+    // ★ 报「命中所在的那一行」，而不是 msg 的第一行：以前一律取首行，
+    //   于是正文里的 C:\\Users\\... 会显示成作者邮箱那一行，完全误导排查方向。
+    const hitLine = msg.split('\n').find((l) => ruleHit(rule, maskWhitelist(l))) || msg.split('\n')[0];
+    hits.push({ where: `commit:${sha}`, rule: rule.name, text: hitLine.trim().slice(0, 120) });
   }
 }
 

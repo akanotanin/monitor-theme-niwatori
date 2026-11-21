@@ -113,8 +113,13 @@ const results = [];
 async function record(name, path, opts, checks) {
   const { s, ws, target, problems } = await openPage(path, opts);
   const ok = await s.waitFor('!!window.__probeTheme && window.__probeTheme.farm.nodes.length > 0', 15000);
-  // 等模型全到位再读状态：decorate 单个模型的超时是 7s，固定 sleep 会读到 pfTotal=0 假红
-  if (opts.waitModels) await s.waitFor('window.__pfTotal > 0', 15000);
+  // 等模型到位再读状态：decorate 单个模型的超时是 7s，固定 sleep 会读到 pfTotal=0 假红。
+  // ★ 1.0.21 起「关键换装」与「纯装饰」分两段完成：先等关键段（pfTotal），
+  //   再等装饰段收尾（pfDecorDone 达到总数），否则会在装饰还没摆完时读到半成品。
+  if (opts.waitModels) {
+    await s.waitFor('window.__pfTotal > 0', 15000);
+    await s.waitFor('!window.__pfDecorTotal || (window.__pfDecorDone || 0) >= window.__pfDecorTotal', 15000);
+  }
   // 等两帧，让首屏淡入 / NPC 出生跑完
   await sleep(opts.wait ?? 1800);
   const state = ok ? await s.eval(`(() => {
@@ -163,6 +168,8 @@ async function record(name, path, opts, checks) {
       pfDecor: window.__pfDecor || 0,
       pfTotal: window.__pfTotal || 0,
       pfLog: (window.__pfLog || []).length,
+      pfDecorTotal: window.__pfDecorTotal || 0,
+      pfDecorDone: window.__pfDecorDone || 0,
     };
   })()`) : { error: 'theme never initialised' };
   const file = await shot(s, name);
@@ -277,8 +284,11 @@ async function main() {
     ok: results.every((r) => r.ok !== false)
       && noise.length === 0
       // 模型必须一个不少：__pfModels 是「成功摆上去的数量」，以前只断言 > 10，
-      // 而实际有 29 个模型 × 多处摆放（44 次）—— 24 个 404 也能通过（审查 M13）。
+      // 而实际有 29 个模型 × 多处摆放 —— 24 个 404 也能通过（审查 M13）。
+      // ★ 1.0.21 起 decorate 只等「关键换装」（PLAN）就揭幕，__pfTotal 是这批的数量；
+      //   DECOR 纯装饰在后台继续，用 __pfDecorTotal/__pfDecorDone 单独核对。
       && farm.pfTotal > 0 && farm.pfDecor === farm.pfTotal && farm.pfLog === farm.pfTotal
+      && (farm.pfDecorTotal === 0 || farm.pfDecorDone === farm.pfDecorTotal)
       // 狗：数量要对得上配置，且每只都必须挂着自己的模型（共用缓存 scene 的回归 + 模型静默失败）
       && farm.dogs.length === farm.dogCfg && farm.dogs.every((d) => d.model && d.parentIsBody)
       && farm.npcs > 0 && nodes.paused === true && detail.detail === true

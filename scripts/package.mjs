@@ -48,10 +48,21 @@ try {
   trackedSet = new Set(out.split('\0').filter(Boolean).map((p) => p.split(/[\\/]/).join('/')));
 } catch { /* 没有 git（源码 zip / 沙箱）：只按文件名规则 */ }
 const JUNK = /(^|\/)(\.DS_Store|Thumbs\.db)$|\.(log|bak|tmp|orig|rej|swp)$|~$|(^|\/)\._/i;
+// 只有在「未跟踪且名字正常」时才额外放行**已知资源类型**。
+// 以前第二个分支是「未跟踪但名字不是垃圾 → 一律收」，于是 dist/js/world.old.js、dist/notes.txt
+// 这种残留会跟着发布包发出去（实测能进 tar，且会被 hub 当静态资源直接 GET 到）。
+// 现在：未跟踪的文件必须是 dist 真正会用到的扩展名，且不带 .old/.orig/.min 这类手工备份后缀。
+const WANT_EXT = /\.(js|mjs|css|html|json|svg|png|webp|jpe?g|gif|ico|woff2?|ttf|glb|gltf|txt|md|map)$/i;
+// 备份后缀只认真正的「手工残留」形态：world.old.js / main.js.orig / app.copy.css
+// ⚠ 不要包含 min —— `three.module.min.js` 是合法的官方构建。
+const BACKUP_NAME = /\.(old|orig|rej|bak|copy)\.[a-z0-9]+$/i;
 const isWanted = (rel) => {
   if (JUNK.test(rel)) return false;                                   // 本机垃圾：永远不收
-  if (trackedSet) return trackedSet.has(rel) || !rel.split('/').some((seg) => seg.startsWith('.') && seg !== '.well-known');
-  return !rel.split('/').some((seg) => seg.startsWith('.') && seg !== '.well-known');
+  const hidden = rel.split('/').some((seg) => seg.startsWith('.') && seg !== '.well-known');
+  if (hidden) return false;
+  if (trackedSet && trackedSet.has(rel)) return true;                 // 已跟踪：收
+  // 未跟踪：只收「dist 里合法的新资源」，避免 world.old.js / notes.txt 混进包
+  return WANT_EXT.test(rel) && !BACKUP_NAME.test(rel) && !/(^|\/)(notes|todo)\b/i.test(rel);
 };
 
 const files = [];

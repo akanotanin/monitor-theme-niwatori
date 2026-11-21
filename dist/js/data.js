@@ -2,9 +2,9 @@
 // 默认后端是 monitor hub；config.js 的 SOURCE === 'komari' 时字段映射走 js/komari.js（Komari
 // 的公开 API 与 monitor 不同，但映射后聚合/暴躁鸡/详情图都不用改）。
 // 页面路径形如 /chicken/，同源反代把 /chicken/api/* 转到后端的 /api/*（见 nginx 站点块）。
-import * as CFG from './config.js?v=1.0.20';
-import * as Komari from './komari.js?v=1.0.20';
-import * as Nezha from './nezha.js?v=1.0.20';
+import * as CFG from './config.js?v=1.0.21';
+import * as Komari from './komari.js?v=1.0.21';
+import * as Nezha from './nezha.js?v=1.0.21';
 
 // index.html 直开（file:// 或 /themes/x/dist/）也要落到它所在的目录，不是 index.html/api/
 const API = new URL('./api/', document.baseURI.replace(/[^/]*$/, '')).href;
@@ -650,6 +650,11 @@ export class Farm {
         // 退回逐台拉 /api/recent/<uuid>，别让整页一直显示离线。WS 连上后自动停。
         if (!this._liveConnected) recentStats = await this._komariRecentFallback(this.nodes, t);
         if (gen !== this._nodesGen) return;
+        // ★ 本轮 nodes 为空（hub 重启 / 反代半截响应）时不要重算聚合：
+        //   _aggregate 里「没有新鲜样本就 delete this.probes[tid]」会把网站鸡任务表整体清空，
+        //   而 probes 被删后即使 ping 数据还在也重建不出来 —— 正是 _pruneNodeState 想避免的那种
+        //   「恢复后要几分钟才补回来」。保留上一轮的 tasks/probes/netRank，等下一轮有数据再算。
+        if (!this.nodes.length) return;
         // 兜底拿到在线/指标后立刻重算网络榜与网站鸡，不等到下一轮 ping 轮询。
         this._aggregate();
       } else {
@@ -1029,7 +1034,10 @@ export class Farm {
     const m = n.metrics; if (!m || !m.disk_total) return 0;
     return m.disk_used / m.disk_total * 100;
   }
-  nodeById(id) { return this.nodes.find((n) => n.id === id); }
+  /** 按 id 找节点。★ 用宽松比较：调用方既有传数字的（内部代码），也有传 URL 里的字符串的
+   *  （theme-shell 的 follow() 拿 nodeKey(n) = String(n.id)）。全等比较会让点击进详情时
+   *  标题永远停在「探针详情」，而深链刷新反而正确 —— 两条路径不一致。 */
+  nodeById(id) { return this.nodes.find((n) => String(n.id) === String(id)) || null; }
   netRowById(id) { return this.netRank.find((r) => r.node.id === id) || null; }
 
   // ---- 详情：抓某节点历史（资源 + ping），按「节点+窗口+点数」缓存 60s ----

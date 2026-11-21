@@ -1,8 +1,8 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
-import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.20';
-import { PROBES } from './config.js?v=1.0.20';
-import { GOOSE } from './goose.js?v=1.0.20';
-import { DOG } from './dog.js?v=1.0.20';
+import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.21';
+import { PROBES } from './config.js?v=1.0.21';
+import { GOOSE } from './goose.js?v=1.0.21';
+import { DOG } from './dog.js?v=1.0.21';
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ['#63b6ff', '#7ddc6a', '#ffd166', '#ff8f6b', '#c792ea', '#4dd0e1', '#f06292', '#aed581', '#fff176'];
@@ -178,17 +178,26 @@ export class Hud {
       const live = n.online && !!n.metrics;
       const pct = (used, total) => (total ? Math.round(Math.min(100, (Number(used) || 0) / total * 100)) : -1);
       const rate = (v) => (live && v != null && isFinite(v) ? fmtRate(v) : '-');
+      const bytes = (v) => (live && v != null && isFinite(v) ? fmtBytes(v) : '-');
+      // 颜色档位：签名必须包含它，否则 CPU 从 59.6%→60.4%（显示都是 60%）时数字对、颜色错，
+      // 而颜色是三条资源条唯一的非文本信号。60/85 两档与 pctColor 保持一致。
+      const tier = (v) => (v >= 85 ? 2 : v >= 60 ? 1 : 0);
+      const cpuPct = Math.max(0, Math.min(100, Number(m.cpu) || 0));
+      const memP = pct(m.mem_used, memTotal), diskP = pct(m.disk_used, diskTotal);
       return [n.id, Number(n.sort) || 0, n.online ? 1 : 0, n.metrics ? 1 : 0,
         n.name, n.public_remark, n.country, n.os, n.virt,
         n.cpu_cores, n.cpu_name, n.mem_total, n.disk_total,
-        Math.round(Number(m.cpu) || 0), pct(m.mem_used, memTotal), pct(m.disk_used, diskTotal),
+        Math.round(cpuPct), memP, diskP,
+        tier(cpuPct), tier(memP), tier(diskP),
         rate(m.net_rx), rate(m.net_tx),
         m.uptime != null && isFinite(m.uptime) ? fmtUptime(m.uptime) : '-',
-        n.day_rx, n.day_tx, r && r.avg != null ? Math.round(r.avg) : '',
+        // ★ 今日流量也必须按**显示精度**取整：卡片走 fmtBytes(v,1)，而这里以前塞的是原始浮点，
+        //   hub 每轮上报都带小数 → 签名每 6 秒必变 → 整表重建，上一轮的焦点/重建优化等于白做
+        //   （实测：同一 GB 量级下 94.8% 的抖动显示完全不变，却仍然触发重建）。
+        bytes(n.day_rx), bytes(n.day_tx), r && r.avg != null ? Math.round(r.avg) : '',
         cells.map((c) => `${c.label}:${c.lat}:${c.lossTxt}`).join('/'),
         // ★ 离线时长：<60s 用秒级（卡片显示 fmtAgoSec 的「30秒前」），≥60s 按分钟。
-        //   以前一律 Math.floor(/60)，于是「离线 30秒前」会冻结最多 60 秒不更新，
-        //   和旁边每 6 秒刷新的在线数字口径不一致。
+        //   以前一律 Math.floor(/60)，于是「离线 30秒前」会冻结最多 60 秒不更新。
         (() => { const s = seenAgo(n); if (s == null) return -1; return s < 60 ? Math.floor(s) : Math.floor(s / 60) * 60; })(),
       ].join(',');   // 离线时长/静态字段变了也要重画
     }).join('|');

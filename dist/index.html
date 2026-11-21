@@ -12,14 +12,14 @@
 <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-<link rel="stylesheet" href="./style.css?v=1.0.20">
-<link rel="stylesheet" href="./theme.css?v=1.0.20">
+<link rel="stylesheet" href="./style.css?v=1.0.21">
+<link rel="stylesheet" href="./theme.css?v=1.0.21">
 <!-- 首屏关键资源提前建连/预取：3D 引擎是最大的单个文件（671 KB），
      main.js 要等 theme-boot 的两次 fetch 之后才 import 它 —— 不 preload 的话这段时间网络空转。
      只给 three 加：它被所有模块共享，且体积最大、收益最确定。 -->
 <link rel="modulepreload" href="./vendor/three.module.min.js">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/addons/" } }</script>
-<script type="module" src="./js/theme-boot.js?v=1.0.20"></script>
+<script type="module" src="./js/theme-boot.js?v=1.0.21"></script>
 </head>
 <body>
 <div id="app"></div>

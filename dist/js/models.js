@@ -8,8 +8,8 @@
 //   这批模型的长边在 +z，我们的道具长边在 +x，所以需要 +90° 的朝向修正。
 
 import * as THREE from 'three';
-import { MODEL_IDS } from './model-ids.js?v=1.0.20';
-import { loadModel, cloneModel } from './glb-models.js?v=1.0.20';
+import { MODEL_IDS } from './model-ids.js?v=1.0.21';
+import { loadModel, cloneModel } from './glb-models.js?v=1.0.21';
 
 
 export const PF_VERSION = 10;   // 改这个文件时 +1，方便确认浏览器真的拿到了新代码
@@ -164,15 +164,19 @@ export async function decorate(world, scene, groundHeight, opts = {}) {
   window.__pfStart = Math.round(t0);      // decorate 开始时的时间戳（和首帧 FCP 对比用）
   window.__pfLog = [];
   const swapped = new Set();
-  const total = swapJobs.length + decorJobs.length;
-  await Promise.all([...swapJobs, ...decorJobs].map(async ([id, key, job]) => {
+  const swapTotal = swapJobs.length;
+  const decorTotal = decorJobs.length;
+  // ★ 只等「要替换自建道具」的那批就揭幕：DECOR 是纯装饰（芦苇/睡莲/小船/邻居小屋），
+  //   它们到得晚一点不影响第一眼，却会把 showWorld 一起拖住（以前 await Promise.all
+  //   把两类一起等，分批下载的收益只剩带宽竞争，首屏可交互时间没变）。
+  await Promise.all(swapJobs.map(async ([id, key, job]) => {
     try {
       await job();
       ok += 1;
       if (key) swapped.add(key);
       window.__pfLog.push([id, Math.round(performance.now() - t0)]);
-      // 载入动画：每个模型到位都往前推一格（这是最真实的进度源 —— 44 个 GLB 逐个下载换装）
-      try { window.__NIWATORI_LOAD__?.count(ok, total); } catch { /* 装饰不参与主线 */ }
+      // 载入动画：每个模型到位都往前推一格（这是最真实的进度源 —— GLB 逐个下载换装）
+      try { window.__NIWATORI_LOAD__?.count(ok, swapTotal); } catch { /* 装饰不参与主线 */ }
     } catch { /* 静默：这个道具没拉到 → 下面把它自己的自建版放回来 */ }
   }));
   // 没换上的道具：把自建版放出来（它们一开始是藏着的，见 world.js 的 buildScene）
@@ -181,10 +185,20 @@ export async function decorate(world, scene, groundHeight, opts = {}) {
   // 所以这里显式把这一段进度收满（「这一阶段做完了」不等于「页面可以揭幕」——
   // 揭幕仍由 main.js 的首帧钩子决定）。
   try { window.__NIWATORI_LOAD__?.count(1, 1); } catch { /* 装饰不参与主线 */ }
-  window.__pfSwapMs = Math.round(performance.now() - t0);   // 从开始加载到全部换完的耗时（调试用）
+  window.__pfSwapMs = Math.round(performance.now() - t0);   // 关键模型换完的耗时（调试用）
   window.__pfModels = (window.__pfModels || 0) + ok;   // 累加：狗狗等也会往同一个全局 +1
-  window.__pfDecor = ok;             // 只算 decorate 自己的数
-  window.__pfTotal = total;          // 应当成功的总数（cdp-verify 用它断言「一个都没少」）
+  window.__pfDecor = ok;             // 只算「关键换装」的成功数
+  window.__pfTotal = swapTotal;      // 关键模型应当成功的总数（cdp-verify 用它断言「一个都没少」）
+  window.__pfDone = true;            // 关键模型阶段完成（装饰仍在后台继续）
   window.__pfV = PF_VERSION;
+
+  // 纯装饰：后台继续摆，不阻塞揭幕。进度条那一段已经收满，这里只补场景内容。
+  Promise.all(decorJobs.map(async ([id, , job]) => {
+    try {
+      await job();
+      window.__pfDecorDone = (window.__pfDecorDone || 0) + 1;
+    } catch { /* 装饰拉不到就算了，不占位也不报错 */ }
+  })).catch(() => {});
+  window.__pfDecorTotal = decorTotal;
   return ok;
 }
