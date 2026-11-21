@@ -8,7 +8,7 @@
 // 并且把模型挂在 `chicken` 上：main.js 里那些 npc.chicken.* 的老路径（射线点选、羽毛颜色、
 // 名牌远处淡出、手机上放大点击球）不用改就能用。
 import * as THREE from 'three';
-import { sample, push } from './interp.js?v=1.0.19';
+import { sample, push } from './interp.js?v=1.0.20';
 
 // 与联机服（server/farm_server.py，不在本仓库）的 GOOSE_* 必须一致——
 // 客户端只在"详情卡片给玩家看的说明文字"里用它们，判定全在服务端。
@@ -233,7 +233,7 @@ export class GooseBody {
   flap() { this.flapT = 0.45; }
   flash() { this.flashT = 0.18; }
   ko() { this.koT = KO_T; }
-  revive() { this.koT = 0; this.group.rotation.z = 0; }
+  revive() { this.koT = 0; this.group.rotation.z = 0; this.bodyG.rotation.z = 0; this.bodyY = BODY_Y; this.bodyG.position.y = BODY_Y; }
 
   /**
    * 每帧动画。
@@ -263,11 +263,21 @@ export class GooseBody {
     this.flashT = Math.max(0, this.flashT - dt);
     if (this.bodyMat.emissive) this.bodyMat.emissive.setHex(this.flashT > 0 ? 0x882222 : 0x000000);
 
-    // 被啄倒：整体侧翻（与鸡一致）
+    // 被啄倒：转的是 bodyG（身体）而不是 group —— 与 chicken.js 同一口径。
+    // group 的原点在脚底，按脚底侧翻会把身体甩到地面以下（只剩上半截露出来，看着像蹲着）。
+    // 鹅躯干高 0.30、中心离地 0.42：绕身体中心翻 90° 后要再压低到贴地，否则整只埋进土里。
+    this.group.rotation.z = 0;
     const targetZ = dead ? 1.45 : 0;
-    this.group.rotation.z += (targetZ - this.group.rotation.z) * Math.min(1, dt * 8);
+    this.bodyG.rotation.z += (targetZ - this.bodyG.rotation.z) * Math.min(1, dt * 8);
+    // 躯干基准高度单独缓动（站↔躺），走路的上下起伏只是叠在它上面 ——
+    // 直接给 position.y 赋值会把「倒地→起身」的缓动一帧抹掉（鸡那边踩过同一个坑）。
+    this.bodyY ??= BODY_Y;
+    this.bodyY += ((dead ? BODY_Y - 0.09 : BODY_Y) - this.bodyY) * Math.min(1, dt * 8);
 
-    if (dead) return;
+    if (dead) {
+      this.bodyG.position.y = this.bodyY;
+      return;
+    }
 
     this.walkPhase += moved * 9;
     const swing = Math.sin(this.walkPhase) * 0.8 * amp;
@@ -275,7 +285,7 @@ export class GooseBody {
     this.legs[1].rotation.x = -swing;
     this.bodyG.rotation.z = Math.sin(this.walkPhase * 0.5) * 0.1 * amp;
     this.bodyG.rotation.x = amp * 0.06 + (fleeing ? 0.16 : 0);          // 逃窜时头压低往前冲
-    this.bodyG.position.y = BODY_Y + Math.abs(Math.sin(this.walkPhase)) * 0.04 * amp;
+    this.bodyG.position.y = this.bodyY + Math.abs(Math.sin(this.walkPhase)) * 0.04 * amp;
 
     // 头：啄击 > 闲时啄地 > 走路点头
     let headX = 0;

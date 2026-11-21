@@ -8,8 +8,8 @@
 //   这批模型的长边在 +z，我们的道具长边在 +x，所以需要 +90° 的朝向修正。
 
 import * as THREE from 'three';
-import { MODEL_IDS } from './model-ids.js?v=1.0.19';
-import { loadModel, cloneModel } from './glb-models.js?v=1.0.19';
+import { MODEL_IDS } from './model-ids.js?v=1.0.20';
+import { loadModel, cloneModel } from './glb-models.js?v=1.0.20';
 
 
 export const PF_VERSION = 10;   // 改这个文件时 +1，方便确认浏览器真的拿到了新代码
@@ -73,6 +73,18 @@ const DECOR = [
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** 首屏真正「必须马上到位」的模型 = PLAN 里要替换自建道具的那批（swap）。
+ *  纯装饰（DECOR：芦苇/睡莲/小船/邻居小屋）晚一步再到也不影响第一眼，
+ *  所以延到 requestIdleCallback —— 别和关键模型抢带宽。 */
+const EAGER_IDS = [...new Set(PLAN.map((p) => p.id))];
+const IDLE_IDS = [...new Set(DECOR.map((p) => p.id))].filter((id) => !EAGER_IDS.includes(id));
+// MODEL_IDS 是「随包分发的模型清单」（check.mjs 会核对它和 vendor/models 的对应关系）。
+// 上面的分批必须覆盖它：漏掉某个 id 只是少了预热，但说明两处已经不一致了。
+const PLANNED = new Set([...EAGER_IDS, ...IDLE_IDS]);
+for (const id of MODEL_IDS) {
+  if (!PLANNED.has(id) && id !== 'farm-dog-723730') console.warn(`[models] ${id} 在 MODEL_IDS 里但没被 PLAN/DECOR 使用`);
+}
+
 /** 贴地（按包围盒底面对齐，别信模型自报的 origin_y）、居中、朝向、缩放、投影。
  *  GLB 的局部原点不一定在道具中心（这头驴就偏出去十几米）——先按包围盒把水平中心
  *  挪到摆位点，再算四角最低的地面，否则模型会"看着在这、实际在那"。 */
@@ -107,7 +119,14 @@ async function loadOne(id, timeout) {
 }
 
 // 立刻开跑（不 await）：清单在 js/model-ids.js。精细模型始终开启，没有省流开关。
-for (const id of MODEL_IDS) loadModel(id).catch(() => {});
+// ★ 分两批：PLAN 需要的先下（它们决定「第一眼是不是旧道具」），DECOR 的 12 个纯装饰
+//   等首帧空闲了再下 —— 一起抢带宽只会让关键模型更晚到（审查 H-1）。
+for (const id of EAGER_IDS) loadModel(id).catch(() => {});
+const pumpIdle = () => {
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1200));
+  idle(() => { for (const id of IDLE_IDS) loadModel(id).catch(() => {}); }, { timeout: 3000 });
+};
+pumpIdle();
 
 
 /**

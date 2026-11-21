@@ -87,14 +87,34 @@ if (missing.length || badMeta.length) {
 // --check 只读不写：以前它也会把 manifest.json 重写一遍（审查 L18）
 if (CHECK_ONLY) process.exit(0);
 await mkdir(OUT, { recursive: true });
+// ★ sha256 必须覆盖**磁盘上的全部模型**，而不是「本次下载的」：
+//   以前 hashes 只装新下载的，任何人再跑一次（全都在了）就会把 sha256 整块从 manifest 抹掉，
+//   而注释还写着「再次运行可据此发现被替换的同名模型」—— 能力实际不存在。
+const allHashes = {};
+for (const id of MODEL_IDS) {
+  try { allHashes[id] = createHash('sha256').update(await readFile(join(OUT, `${id}.glb`))).digest('hex'); }
+  catch { /* 上面已校验过存在性 */ }
+}
+// 先拿**上一版记录**比对（顺序很重要：必须在覆盖 manifest 之前读旧值），不一致就报警
+let mismatch = 0;
+try {
+  const old = JSON.parse(await readFile(join(OUT, 'manifest.json'), 'utf8'));
+  for (const [id, h] of Object.entries(old.sha256 || {})) {
+    if (allHashes[id] && allHashes[id] !== h) { console.error(`⚠ ${id}.glb 的 sha256 与上次记录不一致（文件被替换/损坏）`); mismatch++; }
+  }
+} catch { /* 第一次生成 */ }
 await writeFile(join(OUT, 'manifest.json'), JSON.stringify({
   license: 'CC BY 4.0',
   attribution: 'embedded in each .glb (asset.copyright / asset.extras)',
   count: MODEL_IDS.length,
   ids: MODEL_IDS,
-  // 本次下载的文件的 sha256（再次运行时可据此发现被替换/损坏的同名模型）
-  ...(Object.keys(hashes).length ? { sha256: hashes } : {}),
+  // 全部模型的 sha256（磁盘现状）：再次运行会拿它对比，发现被替换/损坏的同名模型
+  sha256: allHashes,
 }, null, 2) + '\n');
+if (mismatch) {
+  console.error(`✗ ${mismatch} 个模型与上次记录的 sha256 不一致（manifest 已按当前磁盘内容更新；请确认这是有意替换）`);
+  process.exit(1);
+}
 
 const total = downloaded.reduce((s, [, n]) => s + n, 0);
 console.log(`✓ ${CHECK_ONLY ? '模型齐全' : `本次下载 ${downloaded.length} 个`}（共 ${MODEL_IDS.length} 个，新增 ${(total / 1024 / 1024).toFixed(2)} MB）`);

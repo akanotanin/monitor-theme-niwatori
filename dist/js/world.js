@@ -1383,8 +1383,8 @@ export function buildScene(renderer) {
   sun.position.set(24, 34, 12);
   sun.castShadow = true;
   // 窄屏（手机）上阴影贴图降一档：2048² 的阴影 pass 在手机上很贵，1024² 在手机尺寸下几乎看不出差别
-  const SHADOW_SIZE = innerWidth < 760 ? 1024 : 2048;
-  sun.shadow.mapSize.set(SHADOW_SIZE, SHADOW_SIZE);
+  let shadowSize = innerWidth < 760 ? 1024 : 2048;
+  sun.shadow.mapSize.set(shadowSize, shadowSize);
   sun.shadow.camera.left = -34; sun.shadow.camera.right = 34;
   sun.shadow.camera.top = 34; sun.shadow.camera.bottom = -34;
   sun.shadow.camera.far = 90;
@@ -1916,6 +1916,15 @@ export function buildScene(renderer) {
     scene, camera, obstacles: [], boxObstacles, sun, update, setLighting,
     swappable,
     spinners,
+    /** 窗口尺寸变了：阴影贴图档位跟着换（手机窄屏 1024²、桌面 2048²）。
+     *  换完必须 dispose 旧的 map，否则 three 会一直留着那张 GPU 纹理。 */
+    resize(size) {
+      if (size === shadowSize) return;
+      shadowSize = size;
+      sun.shadow.mapSize.set(size, size);
+      if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+      renderer.shadowMap.needsUpdate = true;
+    },
     /** 隐藏某个自建道具（返回它的障碍记录，给模型定位用） */
     swapOut(key) {
       const s = swappable.get(key);

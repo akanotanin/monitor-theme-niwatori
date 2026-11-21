@@ -2,9 +2,9 @@
 // 默认后端是 monitor hub；config.js 的 SOURCE === 'komari' 时字段映射走 js/komari.js（Komari
 // 的公开 API 与 monitor 不同，但映射后聚合/暴躁鸡/详情图都不用改）。
 // 页面路径形如 /chicken/，同源反代把 /chicken/api/* 转到后端的 /api/*（见 nginx 站点块）。
-import * as CFG from './config.js?v=1.0.19';
-import * as Komari from './komari.js?v=1.0.19';
-import * as Nezha from './nezha.js?v=1.0.19';
+import * as CFG from './config.js?v=1.0.20';
+import * as Komari from './komari.js?v=1.0.20';
+import * as Nezha from './nezha.js?v=1.0.20';
 
 // index.html 直开（file:// 或 /themes/x/dist/）也要落到它所在的目录，不是 index.html/api/
 const API = new URL('./api/', document.baseURI.replace(/[^/]*$/, '')).href;
@@ -47,7 +47,15 @@ export function fmtBytes(v, digits = 1) {
   return `${i === 0 ? Math.round(x) : x.toFixed(digits)} ${u[i]}`;
 }
 export function fmtRate(v) { return `${fmtBytes(v, 1)}/s`; }
-export function fmtPct(v) { return `${(v || 0).toFixed(v >= 10 ? 0 : 1)}%`; }
+/** 百分比文案。<10 保留 1 位小数，否则取整。
+ *  ★ 必须先净化：上游若给字符串（"12.5"）或 null，`v.toFixed` 会抛 TypeError，
+ *  而这个函数在 tick 里被调用 —— main.js 的 tick 一旦抛错整个 3D 循环会停（虽然外层兜住了，
+ *  但那一帧的 HUD/输入都不再更新）。 */
+export function fmtPct(v) {
+  const n = Number(v);
+  if (v == null || v === '' || !Number.isFinite(n)) return '—';
+  return `${n.toFixed(n >= 10 ? 0 : 1)}%`;
+}
 export function fmtUptime(s) {
   s = Math.max(0, Math.round(s || 0));
   const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
@@ -691,7 +699,7 @@ export class Farm {
     }
   }
 
-  // 每 4 秒轮一个节点，取它最近 1 小时的 ping 记录（1 分钟一个桶，够新才敢当"当前值"）
+  // 每 4 秒轮一台节点，取它最近 1 小时的 ping 记录（1 分钟一个桶，够新才敢当"当前值"）
   async refreshPing() {
     // 单飞：4 秒一轮，单台最多 8 秒 —— 卡住的请求不许在定时器上越叠越多（审查 H2）。
     if (this._paused || this._pingBusy) return;
@@ -699,12 +707,21 @@ export class Farm {
     // 每节点延迟只在打开详情时按需查（游客 1d）。这里不发请求。
     if (CONF.source === 'nezha') return;
     if (!this.nodes.length) return;
-    const n = this.nodes[this._rr++ % this.nodes.length];
+    // ★ 按「最久没更新」挑，而不是简单轮转（rr 自增）：
+    //   每 4 秒一台、maxPingAge 300s，节点数 ≥ 76 时轮一圈就超过 300 秒 ——
+    //   300 台站点的绝大多数节点永远等不到刷新，网络画像只覆盖最近约 75 台。
+    //   改成优先补最旧的，任何规模的站点都能让「最旧的那台」尽量新。
+    const n = this._pickPingTarget();
+    if (!n) return;
+    // ★ 先记「尝试时刻」：无论这次成功还是失败，都算「刚试过」——
+    //   否则失败的节点会被 _pickPingTarget 反复当成最旧的，其余节点永远轮不到。
+    (this._pingTriedAt || (this._pingTriedAt = new Map())).set(n.id, now());
     this._pingBusy = true;
     try {
       await this._fetchPing(n);
       this.lastOk = now();
-      this.error = null;
+      // ★ 不要无条件清 error：refreshNodes 刚设下的真错误会被每 4 秒的 ping 成功抹掉，
+      //   错误条一闪就没了（用户只看到「闪了一下」）。ping 成功只说明这一台能查。
       this._aggregate();
       this._emit();
     } catch (e) {
@@ -812,6 +829,26 @@ export class Farm {
   _age(ts) {
     return now() - (Number(ts) + (SERVER_SKEW != null ? SERVER_SKEW : this._pingSkew));
   }
+  /** 挑「最久没有被尝试刷新」的在线节点。
+   *  ★ 判据必须是「上次**尝试**时间」而不是「上次样本时间戳」：
+   *    ping 一直失败的节点（500/超时）根本不会往 this.ping 写东西，
+   *    若按样本时间算，它会永远被判定成「最旧」→ 每轮都选它 → 其余节点的网络数据全部饿死
+   *    （实测：6 台里 1 台恒失败，150 轮后只有 2 台被刷新过，其余 4 台 600s 没数据）。
+   *  用 _pingTriedAt 记尝试时刻：无论成败都算「刚试过」，自然轮转；同时仍然优先补最旧的，
+   *  满足「节点数 ≥76 时简单轮转会让 maxPingAge 之外的那批永远轮不到」的原意。 */
+  _pickPingTarget() {
+    const online = this.nodes.filter((n) => n.online !== false);
+    const pool = online.length ? online : this.nodes;
+    const tried = this._pingTriedAt || (this._pingTriedAt = new Map());
+    let best = null, bestT = Infinity;
+    for (const n of pool) {
+      const t = tried.has(n.id) ? tried.get(n.id) : -Infinity;   // 从没试过 → 最优先
+      if (t < bestT) { bestT = t; best = n; }
+      else if (t === bestT && best && n.id < best.id) best = n;   // 同分按 id，稳定
+    }
+    return best;
+  }
+
   /** 兜底估计（没有 Date 头时才用）。
    *  「最新样本 ≈ 现在」这个假设只在节点刚上报时成立：断报 30 分钟的节点会把单次估计推大 1800s，
    *  而 S+A ≥ S，所以真实偏移是这些估计的**下界** —— 取最小值，别用最后一次
@@ -902,6 +939,9 @@ export class Farm {
   }
 
   _pruneNodeState() {
+    // ★ 本轮 nodes 为空时什么都不能删：一次瞬时的空响应（hub 重启、反代 502、
+    //   切后台后的半截响应）会把全部 ping/丢包/曲线历史清光，恢复后要几分钟才补回来。
+    if (!this.nodes.length) return;
     const ids = new Set(this.nodes.map((n) => n.id));
     for (const k of [...this.ping.keys()]) {
       if (ids.has(k)) continue;
@@ -1121,9 +1161,14 @@ export class Farm {
 
     const raw = [];
     let metricFails = 0;
+    let aborted = 0;
     for (let i = 1; i < settled.length; i++) {
       const r = settled[i];
-      if (r.status !== 'fulfilled') { if (!isAbort(r.reason)) metricFails++; continue; }
+      if (r.status !== 'fulfilled') {
+        // 被 abort 的（切后台/关面板）不算「指标失败」，但要阻止把残缺结果写进 60s 缓存
+        if (isAbort(r.reason)) aborted++; else metricFails++;
+        continue;
+      }
       try { raw.push(Nezha.unwrap(r.value)); } catch { metricFails++; }
     }
     const data = {
@@ -1132,7 +1177,9 @@ export class Farm {
       metricFails,
       fetchedAt: now(),
     };
-    this._cacheDetail(key, data);
+    // ★ 有请求被 abort 时**不写缓存**：残缺结果缓存 60 秒，接下来一分钟里重开详情
+    //   都会缺那几条线且没有任何提示（看起来像「历史就是这样」）。
+    if (!aborted) this._cacheDetail(key, data);
     return data;
   }
 

@@ -12,10 +12,14 @@
 <link rel="icon" type="image/svg+xml" href="./favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-<link rel="stylesheet" href="./style.css?v=1.0.19">
-<link rel="stylesheet" href="./theme.css?v=1.0.19">
-<script type="importmap">{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/addons/" } }</script>
-<script type="module" src="./js/theme-boot.js?v=1.0.19"></script>
+<link rel="stylesheet" href="./style.css?v=1.0.20">
+<link rel="stylesheet" href="./theme.css?v=1.0.20">
+<!-- 首屏关键资源提前建连/预取：3D 引擎是最大的单个文件（671 KB），
+     main.js 要等 theme-boot 的两次 fetch 之后才 import 它 —— 不 preload 的话这段时间网络空转。
+     只给 three 加：它被所有模块共享，且体积最大、收益最确定。 -->
+<link rel="modulepreload" href="./vendor/three.module.min.js">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/addons/" } }</script>
+<script type="module" src="./js/theme-boot.js?v=1.0.20"></script>
 </head>
 <body>
 <div id="app"></div>
@@ -47,9 +51,11 @@
   <div id="feed" aria-live="polite" aria-relevant="additions"></div>
   <div id="banner" role="status" aria-live="polite"></div>
 
-  <!-- 右上啄倒榜：单机模式下换成自己的战绩（主题的 solo.js 负责喂数据） -->
-  <div id="board" class="collapsed" title="点击展开 / 收起" role="button" tabindex="0" aria-expanded="false" aria-controls="board-rows">
-    <h3 id="board-title">🐔 啄倒榜</h3>
+  <!-- 右上啄倒榜：单机模式下换成自己的战绩（主题的 solo.js 负责喂数据）
+       ⚠ 不能把整个容器设成 role="button"：它会让榜单里的每一行在无障碍树里被 presentational 化，
+       读屏用户听不到「谁啄倒了谁」。改成「标题是个按钮、内容照常可读」。 -->
+  <div id="board" class="collapsed">
+    <h3 id="board-title"><button id="board-toggle" type="button" aria-expanded="false" aria-controls="board-rows">🐔 啄倒榜</button></h3>
     <div id="board-rows"></div>
   </div>
 
@@ -73,8 +79,10 @@
 
 <div id="errbar" class="hidden" role="alert" aria-live="assertive"></div>
 
-<!-- 探针列表 / 详情：既是悬浮层（Tab），也是 /nodes 与 /node/<id> 路由的页面主体（theme-shell.js 切 class）。 -->
-<div id="plist" class="hidden" role="dialog" aria-modal="true" aria-labelledby="plist-title">
+<!-- 探针列表 / 详情：既是悬浮层（Tab），也是 /nodes 与 /node/<id> 路由的页面主体（theme-shell.js 切 class）。
+     ⚠ 不声明 aria-modal="true"：这个面板没有焦点陷阱，Tab 还会被站点语义劫持成「开/关面板」——
+     aria-modal 是对读屏的承诺（"外面不可交互"），在这里不成立。用 role="dialog" + 标签即可。 -->
+<div id="plist" class="hidden" role="dialog" aria-labelledby="plist-title">
   <div class="sheet">
     <header>
       <button id="plist-back" class="hidden" type="button" title="返回列表" aria-label="返回列表">←</button>

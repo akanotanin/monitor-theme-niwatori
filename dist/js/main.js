@@ -1,18 +1,18 @@
 // 总装：渲染器、第三人称操控、输入（鼠标/键盘/触屏）、NPC 数据绑定、主循环
 import * as THREE from 'three';
-import { Farm, CONF } from './data.js?v=1.0.19';
-import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.19';
-import { Chicken } from './chicken.js?v=1.0.19';
-import { Npc } from './npc.js?v=1.0.19';
-import { Goose, GOOSE } from './goose.js?v=1.0.19';
-import { Dog, DOG } from './dog.js?v=1.0.19';
-import { Hud } from './hud.js?v=1.0.19';
-import { Net } from './net.js?v=1.0.19';
-import { SoloFarm } from './solo.js?v=1.0.19';
-import { Feathers, Dust } from './feathers.js?v=1.0.19';
-import { Sfx } from './sfx.js?v=1.0.19';
-import { decorate } from './models.js?v=1.0.19';
-import * as CFG from './config.js?v=1.0.19';
+import { Farm, CONF } from './data.js?v=1.0.20';
+import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.20';
+import { Chicken } from './chicken.js?v=1.0.20';
+import { Npc } from './npc.js?v=1.0.20';
+import { Goose, GOOSE } from './goose.js?v=1.0.20';
+import { Dog, DOG } from './dog.js?v=1.0.20';
+import { Hud } from './hud.js?v=1.0.20';
+import { Net } from './net.js?v=1.0.20';
+import { SoloFarm } from './solo.js?v=1.0.20';
+import { Feathers, Dust } from './feathers.js?v=1.0.20';
+import { Sfx } from './sfx.js?v=1.0.20';
+import { decorate } from './models.js?v=1.0.20';
+import * as CFG from './config.js?v=1.0.20';
 
 const $ = (id) => document.getElementById(id);
 // 触屏笔记本的 Chrome/Edge 也常暴露 ontouchstart（但主指针仍是鼠标）：
@@ -226,7 +226,13 @@ function updateFades(dt, keep) {
       m.material.depthWrite = e.now > 0.98;
     }
     if (e.now === 1 && e.want === 1) {
-      for (const [m, orig] of e.orig) m.material = orig;   // 恢复原材质（不留下半透明状态）
+      for (const [m, orig] of e.orig) {
+        // 恢复原材质，并**释放这次 clone 的副本**：以前只把引用换回去，
+        // clone 出来的材质没人再引用却一直留在显存里 —— 每次「挡住→走开」再多一份。
+        const clone = m.material;
+        m.material = orig;
+        clone?.dispose?.();
+      }
       _faded.delete(root);
     }
   }
@@ -238,18 +244,43 @@ let camHitRoot = null;             // 这一帧挡在镜头前的那个"根"（�
 function camSweep(ox, oy, oz, dx, dy, dz) {
   let tmin = 1;
   camHitRoot = null;
+  // ★ 零分配：以前每个遮挡盒在循环里 new 3 个数组（p/d/mn/mx），
+  //   camBlockers 有几十项时每帧 100+ 个短命数组（60fps ≈ 1 万/秒），手机上制造持续 GC 抖动。
+  //   p/d 与循环无关（进来就算好）；mn/mx 只是盒子的四个角 + 余量，直接用标量。
   for (const b of camBlockers) {
-    const p = [ox, oy, oz], d = [dx, dy, dz];
-    const mn = [b[0] - 0.22, b[1], b[2] - 0.22];
-    const mx = [b[3] + 0.22, b[4] + 0.25, b[5] + 0.22];   // 屋顶边缘给一点余量
+    const mnx = b[0] - 0.22, mny = b[1], mnz = b[2] - 0.22;
+    const mxx = b[3] + 0.22, mxy = b[4] + 0.25, mxz = b[5] + 0.22;   // 屋顶边缘给一点余量
     let t0 = 0, t1 = 1, ok = true;
-    for (let i = 0; i < 3; i++) {
-      if (Math.abs(d[i]) < 1e-6) { if (p[i] < mn[i] || p[i] > mx[i]) { ok = false; break; } continue; }
-      let a = (mn[i] - p[i]) / d[i], b2 = (mx[i] - p[i]) / d[i];
+    // x
+    if (Math.abs(dx) < 1e-6) { if (ox < mnx || ox > mxx) ok = false; }
+    else {
+      let a = (mnx - ox) / dx, b2 = (mxx - ox) / dx;
       if (a > b2) { const t = a; a = b2; b2 = t; }
       if (a > t0) t0 = a;
       if (b2 < t1) t1 = b2;
-      if (t0 > t1) { ok = false; break; }
+      if (t0 > t1) ok = false;
+    }
+    // y
+    if (ok) {
+      if (Math.abs(dy) < 1e-6) { if (oy < mny || oy > mxy) ok = false; }
+      else {
+        let a = (mny - oy) / dy, b2 = (mxy - oy) / dy;
+        if (a > b2) { const t = a; a = b2; b2 = t; }
+        if (a > t0) t0 = a;
+        if (b2 < t1) t1 = b2;
+        if (t0 > t1) ok = false;
+      }
+    }
+    // z
+    if (ok) {
+      if (Math.abs(dz) < 1e-6) { if (oz < mnz || oz > mxz) ok = false; }
+      else {
+        let a = (mnz - oz) / dz, b2 = (mxz - oz) / dz;
+        if (a > b2) { const t = a; a = b2; b2 = t; }
+        if (a > t0) t0 = a;
+        if (b2 < t1) t1 = b2;
+        if (t0 > t1) ok = false;
+      }
     }
     if (ok && t0 > 0.02 && t0 < tmin) { tmin = t0; camHitRoot = b[6] || null; }
   }
@@ -1039,6 +1070,9 @@ function tickBody(now) {
   playerChicken.update(dt, mag > 0.05 && player.koT <= 0, running, player.pos.y > gh + 0.05);
 
   // ---- NPC ----
+  // ⚠ 回收循环必须在 solo.update() **之后**：以前它在前面，solo.update 某一帧抛错
+  //   → _seenAt 不刷新 → 下一帧全场本地鸡被 dispose，要等下一轮 farm.onChange（最长 6s+）才重建。
+  //   （tick 外层虽然兜住了异常，但那只是「不停帧」，不代表这里的状态是自洽的。）
   for (const npc of npcs.values()) {
     npc.update(dt, player);                       // 服务端权威：只走快照插值那条路
     // 逃窜的鸡脚后跟拖一串土（一眼看得出它是在"撒腿跑"，而不是照常散步）
@@ -1049,10 +1083,15 @@ function tickBody(now) {
         dust.puff(_tmpV.set(npc.pos.x, npc.pos.y + 0.05, npc.pos.z), 2, 0.6);
       }
     }
-    // 服务端连续 3 秒不再下发这只鸡 → 它已经不在名单里了，收掉模型
-    if (npc._seenAt && performance.now() - npc._seenAt > 3000) { npc.dispose(scene); npcs.delete(npc.id); }
   }
   solo?.update(dt, player);      // 单机模式：本地 AI 在软分离之前把位置走完
+
+  // 收掉「服务端连续 3 秒不再下发」的鸡 —— 放在 solo.update 之后，避免它抛错时整场被回收。
+  // 边遍历边删 Map 是安全的（规范：删除当前项不会影响后续迭代），不必先复制一份数组
+  // （以前 [...npcs.values()] 每帧分配一个新数组，白白制造 GC 压力）。
+  for (const [id, npc] of npcs) {
+    if (npc._seenAt && performance.now() - npc._seenAt > 3000) { npc.dispose(scene); npcs.delete(id); }
+  }
 
   // ---- 实体间软分离：玩家 / 鸡 / 其他玩家不许叠在一起 ----
   separateEntities();
@@ -1074,8 +1113,11 @@ function tickBody(now) {
     _camWant.set(player.pos.x, player.pos.y + 0.9, player.pos.z),
     Math.min(1, dt * 14),
   );
-  // 模型换装完成后（__pfSwapMs 变了）重量一次遮挡体：之前量到的是自建旧道具，尺寸对不上
-  const _stamp = window.__pfSwapMs || 0;
+  // 模型换装完成后（__pfSwapMs 变了）重量一次遮挡体：之前量到的是自建旧道具，尺寸对不上。
+  // ★ 狗是**异步**加载的（dog.js 的 loadModel 晚于 decorate 结束），它永远不会进入这张表 ——
+  //   以前只看 __pfSwapMs 一个时间戳。现在同时看 __pfModels（每换上一个模型都会 +1，
+  //   狗的 loadModel 也会 +1），任何后到的模型都能触发一次重建。
+  const _stamp = `${window.__pfSwapMs || 0}:${window.__pfModels || 0}`;
   if (_stamp !== camBoxStamp) { camBoxStamp = _stamp; rebuildCamBlockers(); }
   const cd = camDist + (player.pos.y - gh > 0.05 ? (player.pos.y - gh) * 0.5 : 0);
   // 方向向量（与下面旧写法一致：camTarget 指向机位）
@@ -1169,7 +1211,11 @@ function tickBody(now) {
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
+  // ★ 跟着窗口刷新 pixelRatio / 阴影贴图档位：从 2x 屏拖到 1x 屏（或反之）时
+  //   以前一直按启动时的 dpr 渲染 —— 1x 屏幕上白渲 4 倍像素，手机转横屏仍是窄屏的 1024² 阴影。
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
   renderer.setSize(innerWidth, innerHeight);
+  world.resize(innerWidth < 760 ? 1024 : 2048);
 });
 
 // ---------- 操作说明（底部中置一条，桌面/手机文案不同）----------
@@ -1203,6 +1249,10 @@ const showWorld = () => {
       clearTimeout(fallback);
       canvas.style.opacity = '1';
       bootEl.classList.add('done');
+      // ★ 揭幕后显式释放载入动画：resize 监听、pointerdown 监听、闭包里的 4 个 Path2D
+      //   + 池子（约 1.7 MB）都会一直挂在 window 上 —— 幕布元素被 remove 了也照样活着。
+      //   以前只 remove 元素、不调 dispose，每次转屏都会往已摘除的 canvas 重绘一轮。
+      try { window.__NIWATORI_LOAD__?.dispose?.(); } catch { /* 老版本/没挂上 */ }
       setTimeout(() => bootEl.remove(), 420);
     };
     // 动画异常 / 回调没触发时别把访客困在幕布上（有上限，不是「到点就撤」）

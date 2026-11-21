@@ -290,19 +290,44 @@ async function serveStatic(res, pathname) {
 }
 
 const server = createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
-  if (url.pathname.startsWith('/api/')) return api(req, res, url.pathname, url.searchParams);
-  const hit = await serveStatic(res, url.pathname);
-  if (hit) return;
-  // SPA 回退：/nodes、/node/1 这类没有扩展名的路径都回 index.html
-  if (!extname(url.pathname)) {
-    const body = await readFile(indexPath);
-    res.writeHead(200, { 'content-type': MIME['.html'], 'content-length': body.length, 'cache-control': 'no-store' });
-    return res.end(body);
+  // ★ Host 头是客户端可控的：以前直接拼进 new URL 的 base，
+  //   发一个 `Host: [` 就抛 ERR_INVALID_URL → async 回调里未捕获 → **整个进程退出**。
+  //   本服务不需要绝对 URL，固定 base 即可（顺带少一个攻击面）。
+  res.on('error', () => { /* 客户端提前断开：别让它变成未捕获异常 */ });
+  try {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    if (url.pathname.startsWith('/api/')) return api(req, res, url.pathname, url.searchParams);
+    const hit = await serveStatic(res, url.pathname);
+    if (hit) return;
+    // SPA 回退：/nodes、/node/1 这类没有扩展名的路径都回 index.html
+    if (!extname(url.pathname)) {
+      const body = await readFile(indexPath);
+      res.writeHead(200, { 'content-type': MIME['.html'], 'content-length': body.length, 'cache-control': 'no-store' });
+      return res.end(body);
+    }
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end('not found');
+  } catch (e) {
+    // 兜底：单次请求的任何异常都不许打死本地验收服务
+    try {
+      if (!res.headersSent) res.writeHead(400, { 'content-type': MIME['.json'] });
+      res.end(JSON.stringify({ error: 'mock: bad request' }));
+    } catch { /* 连接已经没了 */ }
+    console.warn('[mock-hub] 请求处理出错：', String((e && e.message) || e));
   }
-  res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-  res.end('not found');
 });
+
+// 端口占用之类也别抛裸栈；进程级兜底避免「一个坏请求打死服务」
+server.on('error', (e) => {
+  if (e && e.code === 'EADDRINUSE') {
+    console.error(`✗ 端口 ${PORT} 已被占用（换 --port，或先关掉已运行的那个 mock-hub）`);
+    process.exit(2);
+  }
+  console.error('[mock-hub] server error:', e);
+  process.exit(1);
+});
+process.on('uncaughtException', (e) => console.error('[mock-hub] 未捕获异常（服务继续）：', e));
+process.on('unhandledRejection', (e) => console.error('[mock-hub] 未处理的 Promise 拒绝（服务继续）：', e));
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`mock Monitor hub → http://127.0.0.1:${PORT}/  (dist: ${ROOT})`);

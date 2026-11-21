@@ -22,24 +22,57 @@ const SKIP_DIRS = new Set(['.git', 'node_modules', 'release']);
 // ---------- 通用形态 ----------
 // 已知误报：命中这些形态的行不再算泄漏（example.com 这类占位符、GitHub 的 noreply 地址、图标文件名）
 const WHITELIST = [
-  /@example\.(com|org|net)\b/i,
+  /@example\.(com|org|net)(?![.\w-])/i,
   /git@github\.com:/,
   /icon@2x\./i,
   /[\w.-]+@users\.noreply\.github\.com/i,
   /https?:\/\/(www\.)?(github\.com|creativecommons\.org|polyfork\.dev|threejs\.org|flagcdn\.com|flagpedia\.net|komari\.wiki|nezha\.wiki)\//i,
 ];
 
+// 白名单必须**片段级**：以前是「整行命中任一白名单就 continue」，
+// 于是 `见 https://github.com/x，本机 192.168.1.7` 这条真泄漏被一行公开链接整行豁免掉。
+// 现在的做法：先把白名单匹配到的片段从行里挖掉，再跑 GENERIC 判据。
+const maskWhitelist = (line) => WHITELIST.reduce((s, w) => s.replace(new RegExp(w.source, w.flags.includes('g') ? w.flags : w.flags + 'g'), ' '), line);
+
+/** 这条规则的这次命中是否应当放过（rule.skip 是可选的上下文豁免）。 */
+const ruleHit = (rule, text) => {
+  const m = rule.re.exec(text);
+  if (!m) return false;
+  return !(rule.skip && rule.skip(text, m.index));
+};
+
 const GENERIC = [
-  // Windows 用户目录：正斜杠、反斜杠、file:/// 都要认（以前只认反斜杠，C:/Users/… 从缝里漏了）
-  { name: 'Windows 用户目录', re: /[A-Za-z]:[\\/]{1,2}Users[\\/][^\\/\s"']+/i },
-  { name: 'file:// 本机路径', re: /file:\/\/\/?[A-Za-z]:?\/?Users\//i },
-  { name: 'WSL 挂载路径', re: /\/mnt\/[a-z]\/Users\/[^\/\s"']+/i },
+  // Windows 用户目录：正斜杠、反斜杠、JSON 里的双反斜杠都要认。
+  // ★ 分隔符必须是「一个或多个」：旧写法 [\\/]{1,2}Users[\\/][^\\/\s"']+
+  //   在 JSON.stringify 的真实产物 `C:\\Users\\alice\\x` 上会失配 ——
+  //   Users 后的第一个反斜杠被 [\\/] 吃掉，第二个被 [^\\/] 拒绝，整条不匹配。
+  //   而 .json（package.json / theme.json / manifest.json / fixtures）恰恰最容易夹带本机路径。
+  { name: 'Windows 用户目录', re: /[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"']+/i },
+  { name: 'file:// 本机路径', re: /file:\/\/\/?[A-Za-z]:?\/?(Users|home)\/[^\/\s"']+/i },
+  { name: 'WSL 挂载路径', re: /\/mnt\/[a-z]\/(Users|home)\/[^\/\s"']+/i },
+  { name: 'Windows 其它盘符路径', re: /(^|[\s"'(])[D-Zd-z]:[\\/]+[^\s"':]{3,}/ },
+  { name: 'UNC 路径', re: /\\\\[\w.-]+\\[\w.$-]+/ },
+  { name: '环境变量路径', re: /%(USERPROFILE|APPDATA|LOCALAPPDATA|HOMEPATH)%/i },
+  { name: 'URL 编码的本机路径', re: /[A-Za-z]%3A(%2F|%5C)+(Users|home)/i },
   { name: '服务器绝对路径', re: /(^|[\s"'(])\/(opt|var\/www|root|etc\/nginx|home\/[a-z]+)(\/|\b)/ },
   { name: '本机绝对路径', re: /(^|[\s"'(])\/(Users|home)\/[a-z0-9._-]+\//i },
   { name: '家目录简写', re: /(^|[\s"'(])~\/[a-z0-9._-]+\//i },
-  { name: '邮箱（非 noreply）', re: /\b[A-Za-z0-9._%+-]+@(?!users\.noreply\.github\.com)[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i },
-  { name: 'IPv4 字面量', re: /\b(?!127\.0\.0\.1\b)(?!0\.0\.0\.0\b)(?!192\.0\.2\.)(?!198\.51\.100\.)(?!203\.0\.113\.)([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\b/ },
-  { name: '运维命令痕迹', re: /\b(ssh\s+-[a-zA-Z]*\s*-?[pP]\s*233|root@[a-z0-9.-]+\.[a-z]{2,}|systemctl\s+(reload|restart)\s+(nginx|caddy))\b/i },
+  // 邮箱：域名段重复次数受限（旧写法 [A-Za-z0-9.-]+\.[A-Za-z]{2,} 在长串上多项式回溯，
+  // 64 KB 单行能跑 875 ms —— 一条 minified 行就能把自检拖到分钟级）
+  { name: '邮箱（非 noreply）', re: /\b[A-Za-z0-9._%+-]+@(?!users\.noreply\.github\.com)[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/i },
+  // IPv4：必须校验八位组 ≤255，且前后不能再接数字/点 ——
+  // 旧写法把 `"version": "1.2.3.4"`、`999.999.999.999`、`1.2.3.4.5` 全部误报成公网 IP。
+  // 另外 `1.2.3.4` 这种四段纯数字也常见于版本号：JSON 里紧跟在 "version"/"ver"/"v" 键后的不报。
+  {
+    name: 'IPv4 字面量',
+    re: /(?<![\d."':=])(?!127\.0\.0\.1(?!\d))(?!0\.0\.0\.0(?!\d))(?!192\.0\.2\.)(?!198\.51\.100\.)(?!203\.0\.113\.)((?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d))(?![\d.])/,
+    // 命中后回到行里看：四段全 < 256 且形如 1.2.3.4 的短串，若前面是版本号键就放过
+    skip: (line, at) => {
+      const head = line.slice(0, at);
+      return /("|')?(version|ver|v)("|')?\s*[:=]\s*("|')?\s*$/i.test(head);
+    },
+  },
+  { name: '运维命令痕迹', re: /\b(ssh\s+(?:-\S+\s+)*-?[pP]\s*233|root@[a-z0-9.-]+\.[a-z]{2,}|systemctl\s+(reload|restart)\s+(nginx|caddy))\b/i },
 ];
 
 // ---------- 站点专属词表 ----------
@@ -52,7 +85,14 @@ function loadList() {
     .filter((l) => l && !l.startsWith('#'))
     .map((l) => {
       // re:… 才是正则，其余一律按字面量（"/opt/monitor" 曾被当成 /opt/i，误报一片）
-      if (l.startsWith('re:')) return { name: `词表 ${l}`, re: new RegExp(l.slice(3), 'i'), isRe: true };
+      if (l.startsWith('re:')) {
+        try { return { name: `词表 ${l}`, re: new RegExp(l.slice(3), 'i'), isRe: true }; }
+        catch (e) {
+          // 坏正则不该甩一屏裸栈（也看不出是哪一行）：直接指出行号
+          console.error(`✗ .leaklist 里的正则写坏了（${l}）：${e.message}`);
+          process.exit(2);
+        }
+      }
       return { name: `词表 ${l}`, re: new RegExp(l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
     });
 }
@@ -97,7 +137,8 @@ const listRules = loadList();
 const hits = [];
 const SELF = 'scripts/check-leaks.mjs';        // 本文件里有"反例"注释，别扫自己
 
-for (const rel of listFiles()) {
+const fileList = listFiles();          // 只枚举一次：以前扫一遍、统计又数一遍，中途增删文件会对不上
+for (const rel of fileList) {
   if (rel === SELF) continue;
   const full = join(ROOT, rel);
   const buf = readFileSync(full);
@@ -111,7 +152,10 @@ for (const rel of listFiles()) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!rule.re.test(line)) continue;
-      if (WHITELIST.some((w) => w.test(line))) continue;     // 占位符/公开链接/图标名不算泄漏
+      // ★ 白名单是「片段级」：只挖掉公开链接/占位符那一段，同一行里的内网 IP / 本机路径照样要报。
+      //   以前是整行 continue —— 一行里带 github.com 就能把真泄漏夹带出去。
+      const masked = maskWhitelist(line);
+      if (!ruleHit(rule, masked)) continue;
       hits.push({ where: `${rel}:${i + 1}`, rule: rule.name, text: line.trim().slice(0, 120) });
       break;                       // 一条规则每个文件只报一次
     }
@@ -121,27 +165,36 @@ for (const rel of listFiles()) {
 // 提交信息也算「公开出去的文字」
 const allRules = [...listRules, ...GENERIC];
 // 作者/提交者邮箱也算公开信息（%B 只是正文，以前没扫 %an/%ae）
-const log = gitSafe(['log', '--all', '--format=%H%x09%an <%ae>%x09%B']);
+// ★ 用 %x1e（记录分隔符）+ split：以前用 `%H%x09…%x09%B` 再 split('\n\n')，
+//   提交正文含空行（subject/body 之间几乎都有）时会被切碎，后面几段的 sha 归错、甚至整段丢弃。
+const RS = '\x1e';
+const log = gitSafe(['log', '--all', `--format=%H%x09%an <%ae>%x09%B${RS}`]);
 const commitsScanned = log != null;
 if (!commitsScanned) console.log('· 没有可用的 git：跳过提交信息扫描');
 else
-for (const block of log.split('\n\n')) {
-  const [head, ...rest] = block.split('\n');
+for (const block of log.split(RS)) {
+  const clean = block.replace(/^\n+/, '');
+  if (!clean.trim()) continue;
+  const [head, ...rest] = clean.split('\n');
   if (!head) continue;
   const sha = head.split('\t')[0].slice(0, 8);
   const meta = head.split('\t')[1] || '';
   const msg = [meta, ...rest].join('\n');
-  if (WHITELIST.some((w) => w.test(msg))) continue;
+  // 片段级白名单（同文件扫描）：一条提交里出现公开链接，不能连带豁免同一段里的内网 IP
+  const masked = maskWhitelist(msg);
   for (const rule of allRules) {
-    if (rule.re.test(msg)) hits.push({ where: `commit:${sha}`, rule: rule.name, text: msg.trim().split('\n')[0].slice(0, 120) });
+    if (ruleHit(rule, masked)) hits.push({ where: `commit:${sha}`, rule: rule.name, text: msg.trim().split('\n')[0].slice(0, 120) });
   }
 }
 
 // ---------- 报告 ----------
 if (!hits.length) {
-  const filesCount = listFiles().length;
+  const filesCount = fileList.length;
   console.log(`· 脱敏自检：${filesCount} 个文件 + ${commitsScanned ? '全部提交信息' : '（提交信息已跳过）'}，${allRules.length} 条判据，零命中 ✓`);
   if (!existsSync(join(ROOT, '.leaklist'))) console.log('  （没找到 .leaklist，只跑了通用形态）');
+  // ★ 受限环境里 git 被拒（沙箱 EPERM）会让提交扫描静默跳过，退出码仍是 0 ——
+  //   那等于「脱敏零命中」其实没查历史。给独立退出码 3，别让它冒充通过。
+  if (!commitsScanned) { console.log('⚠ 提交信息未扫描（exit 3）'); process.exit(3); }
   process.exit(0);
 }
 

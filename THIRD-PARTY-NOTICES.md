@@ -3,11 +3,10 @@
 再分发时请连同本文件一起带走。
 
 ## 1. three.js r169（MIT）
-随包分发的文件：`dist/vendor/three.module.js`、`dist/vendor/addons/**`（5 个文件：`geometries/ConvexGeometry.js`、`loaders/GLTFLoader.js`、`math/ConvexHull.js`、`utils/BufferGeometryUtils.js`、`utils/SkeletonUtils.js`）。
+随包分发的文件：`dist/vendor/three.module.min.js`（官方 min 构建）、`dist/vendor/addons/**`（3 个文件：`loaders/GLTFLoader.js`、`utils/BufferGeometryUtils.js`、`utils/SkeletonUtils.js`）。
 
-与 npm `three@0.169.0` 逐字节一致，未做修改。
-其中 `addons/geometries/ConvexGeometry.js` 与 `addons/math/ConvexHull.js` 目前**没有被主题引用**，
-随 three r169 的 addons 一并分发（保留是为了以后做凸包碰撞时不用再补 vendor）。
+与 npm `three@0.169.0` 的 `build/three.module.min.js` 逐字节一致，未做修改（许可头 `@license ... SPDX-License-Identifier: MIT` 保留在文件开头）。
+用 min 构建而不是 dev 构建：dev 版 1.30 MB / 257 KB gzip，min 版 671 KB / 166 KB gzip —— 首屏少下载 600 KB+。
 
 ```
 The MIT License

@@ -35,10 +35,22 @@ function start() {
   }
   const nodeKey = (n) => String(n.id);
 
+  // 自维护的地址栈：用来识别「replace 之后会和上一条重复」的情况（见 push）
+  let trail = [location.pathname];
   function push(path, replace = false) {
     if (location.pathname === path) return;
+    // ★ 详情按 Esc 回列表时走 replace，栈会变成 [/, /nodes, /nodes] ——
+    //   浏览器的「后退」落在同一 URL 上，画面不变，看着像失灵。
+    //   这种「replace 目标和上一条相同」的情况改成 back()：栈收回 [/, /nodes]，后退就回农场。
+    if (replace && trail.length >= 2 && trail[trail.length - 2] === path) {
+      trail.pop();
+      try { history.back(); } catch { /* 没有 History API */ }
+      return;
+    }
     try {
       history[replace ? 'replaceState' : 'pushState']({}, '', path);
+      if (replace) trail[trail.length - 1] = path;
+      else trail.push(path);
     } catch { /* 极老的浏览器没有 History API：地址栏不跟手，功能照旧 */ }
   }
 
@@ -115,7 +127,13 @@ function start() {
     route = next;
     document.body.classList.toggle('route-farm', next.view === 'farm');
     api.setPaused(next.view !== 'farm');
+    // 标题跟着视图走（以前只有回农场才写，进详情后标签页还写着「探针列表」）
     if (next.view === 'farm') document.title = baseTitle;
+    else if (next.view === 'nodes') document.title = '探针列表 · ' + baseTitle;
+    else {
+      const n = farm.nodeById(next.key);
+      document.title = n ? `${n.name} · ${baseTitle}` : '探针详情 · ' + baseTitle;
+    }
   }
 
   // ---------- 把 hud 的动作接到地址栏 ----------
@@ -203,7 +221,14 @@ function start() {
   if (credit) credit.classList.remove('hidden');
 
   // ---------- 浏览器前进 / 后退 ----------
-  addEventListener('popstate', () => { apply(parse()); });
+  addEventListener('popstate', () => {
+    // 地址栏动了（前进/后退）：本地栈跟着同步，否则后面的 replace 判断会用错基准
+    const p = location.pathname;
+    const at = trail.lastIndexOf(p);
+    if (at >= 0) trail = trail.slice(0, at + 1);
+    else trail.push(p);
+    apply(parse());
+  });
 
   // 首次进入：把地址对应的界面摆好
   apply(parse());

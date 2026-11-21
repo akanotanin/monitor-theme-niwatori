@@ -51,6 +51,9 @@ body.ld-ready #boot .ld-tip{opacity:1}
   padding:10px 14px;border-radius:10px;background:var(--glass);backdrop-filter:blur(4px);
   font-size:13px;color:#fff;pointer-events:auto;cursor:pointer}
 #board h3{margin:0 0 6px;font-size:13px;font-weight:700;color:var(--accent)}
+/* 标题里的按钮：外观跟原来的 h3 一致（它只是把「可点」这件事交给按钮语义） */
+#board h3 button{margin:0;padding:0;border:0;background:none;font:inherit;color:inherit;cursor:pointer}
+#board h3 button:focus-visible{outline:2px solid rgba(255,215,102,.7);outline-offset:2px;border-radius:4px}
 #board.collapsed h3{margin-bottom:0}
 #board.collapsed #board-rows{display:none}
 #board .row{display:flex;justify-content:space-between;gap:16px;line-height:1.7}
@@ -278,7 +281,7 @@ body.touch #me{bottom:calc(154px + env(safe-area-inset-bottom))}
   font:inherit;text-align:left;cursor:pointer;transition:background .15s,border-color .15s}
 .pcard:hover{background:rgba(255,215,102,.10);border-color:rgba(255,215,102,.45)}
 .pcard:focus-visible{outline:2px solid rgba(255,215,102,.7);outline-offset:2px}
-.pcard.off{opacity:.62}
+.pcard.off{opacity:.82}                 /* 离线卡片压暗一档；.62 会把次级文字压到 3.3:1（AA 要求 4.5） */
 .phead{display:flex;align-items:center;gap:7px;min-width:0}
 .phead .fl{width:20px;height:14px;object-fit:cover;border-radius:2px;flex:none;background:rgba(255,255,255,.12)}
 .phead .fl.emoji{width:auto;font-size:14px;line-height:1;background:none}

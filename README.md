@@ -20,7 +20,7 @@
 需要 **Monitor hub 1.5.2+**（已在 v1.5.2 上实测：`/api/me`、`/api/nodes`、`/api/nodes/{id}/metrics`、
 `/api/themes/<short>/config`、主题安装与 SPA 回退都在这个版本里）。
 
-1. 从 [Releases](https://github.com/akanotanin/monitor-theme-niwatori/releases) 下载 `monitor-theme-niwatori-1.0.19.tar.gz`
+1. 从 [Releases](https://github.com/akanotanin/monitor-theme-niwatori/releases) 下载 `monitor-theme-niwatori-1.0.20.tar.gz`
 2. 后台 → 主题 → 上传 tar.gz
 3. 可选设置：网站鸡、大白鹅/看门狗数量、暴躁鸡阈值、光照、音效
 
@@ -31,10 +31,20 @@
 ```bash
 npm run check        # 静态自检（配置、资源、模型、署名）+ 脱敏自检
 npm run check:leaks  # 只跑脱敏自检（读本机 .leaklist，可选；不提交）
-npm run mock         # http://127.0.0.1:18099
+npm run mock         # 假 hub：http://127.0.0.1:18099（默认端口）
 npm run verify       # 需要 Chrome 开着 --remote-debugging-port=9333（Node 22+：脚本用全局 WebSocket）
-npm run check:loading # 载入动画专项（11 项）；需要再起一个静态服务供 tools/ld-preview.html
 npm run package      # release/*.tar.gz
+```
+
+载入动画专项（11 项）要另外起一个静态服务，因为预览页 `tools/ld-preview.html` 不在 `dist/` 里
+（`mock` 只伺服 `dist/`，直接访问会 404）。任选一个：
+
+```bash
+npx --yes serve -l 5210 .          # 或者
+python -m http.server 5210         # 或者仓库自带的 node 一行服务
+
+CDP_PORT=9333 BASE=http://127.0.0.1:18099 \
+  PREVIEW=http://127.0.0.1:5210/tools/ld-preview.html npm run check:loading
 ```
 
 脱敏自检（`scripts/check-leaks.mjs`）会扫工作区与全部提交信息，查本机绝对路径、非 noreply 邮箱、IPv4、

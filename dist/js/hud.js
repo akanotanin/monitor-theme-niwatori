@@ -1,8 +1,8 @@
 // HUD：顶栏、啄倒榜、播报、自身状态、详情抽屉（纯 canvas 画图，不引图表库）
-import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.19';
-import { PROBES } from './config.js?v=1.0.19';
-import { GOOSE } from './goose.js?v=1.0.19';
-import { DOG } from './dog.js?v=1.0.19';
+import { fmtBytes, fmtRate, fmtPct, fmtUptime, fmtAgoSec, seenAgo, shortCpu, CONF } from './data.js?v=1.0.20';
+import { PROBES } from './config.js?v=1.0.20';
+import { GOOSE } from './goose.js?v=1.0.20';
+import { DOG } from './dog.js?v=1.0.20';
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ['#63b6ff', '#7ddc6a', '#ffd166', '#ff8f6b', '#c792ea', '#4dd0e1', '#f06292', '#aed581', '#fff176'];
@@ -15,11 +15,14 @@ export class Hud {
     this.hot = $('hot');
     // 右上啄倒榜 + 左下自身卡片（行数据由 main.js 从快照 ps/ns 里算好再喂进来）
     this.boardEl = $('board'); this.boardTitle = $('board-title'); this.boardRows = $('board-rows');
+    this.boardToggle = $('board-toggle');
     this.meName = $('me-name'); this.hpfill = $('hpfill'); this.scoreEl = $('score');
     const toggleBoard = () => { this.collapsed = !this.collapsed; this.renderBoard(true); };
-    this.boardEl.addEventListener('click', toggleBoard);
-    this.boardEl.addEventListener('keydown', (e) => {
-      if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); toggleBoard(); }
+    // 只让标题那个按钮响应：容器不再是 role=button（那会把榜内每行呈现化，读屏读不到内容）
+    this.boardToggle?.addEventListener('click', toggleBoard);
+    this.boardEl.addEventListener('click', (e) => {
+      // 点卡片空白处也能收合（保持原来的手感），但不重复响应按钮本身
+      if (e.target !== this.boardToggle && !this.boardToggle?.contains(e.target)) toggleBoard();
     });
     this.feedEl = $('feed'); this.bannerEl = $('banner');
     this.errbar = $('errbar');
@@ -144,7 +147,7 @@ export class Hud {
       if (card) setTimeout(() => { try { card.focus({ preventScroll: true }); } catch { /* 老浏览器 */ } }, 0);
     }
   }
-  /** 重画列表。数据每 6 秒一轮，所以只在数值真变了才重建（并保住滚动位置）。 */
+  /** 重画列表。数据每 6 秒一轮，所以只在「屏幕上显示的字真变了」才重建（并保住滚动位置与焦点）。 */
   renderProbes(force = false) {
     if (!this.plist || !this.probesOpen) return;
     const f = this.farm;
@@ -156,15 +159,38 @@ export class Hud {
       || (Number(a.sort) || 0) - (Number(b.sort) || 0)
       || a.id - b.id);
     const netOf = (n) => f.netRowById(n.id);
-    const cellsOf = (n) => netCells(n, f);
+    // netCells 内部要遍历全部 farm.probes 并分组排序：每台算两遍（签名 + 渲染）是纯浪费，
+    // 一遍算完存进 Map，两个地方共用。
+    const cellsCache = new Map();
+    const cellsOf = (n) => {
+      let c = cellsCache.get(n.id);
+      if (!c) { c = netCells(n, f); cellsCache.set(n.id, c); }
+      return c;
+    };
+    // ★ 签名只收「显示出来会变的东西，且按显示精度取整」。
+    //   卡片上 CPU/内存/磁盘是整数百分比（toFixed(0)），网速走 fmtRate（1 位小数），
+    //   延迟是 Math.round(avg)。以前直接塞 m.cpu / m.net_rx 的原始浮点值，
+    //   hub 每轮采样都带小数 → 签名每 6 秒必然不同 → 整表重建 → 键盘/读屏用户的焦点每 6 秒被抛回 body。
     const sig = nodes.map((n) => {
       const m = n.metrics || {}, r = netOf(n), cells = cellsOf(n);
+      const memTotal = Number(n.mem_total || m.mem_total) || 0;
+      const diskTotal = Number(n.disk_total || m.disk_total) || 0;
+      const live = n.online && !!n.metrics;
+      const pct = (used, total) => (total ? Math.round(Math.min(100, (Number(used) || 0) / total * 100)) : -1);
+      const rate = (v) => (live && v != null && isFinite(v) ? fmtRate(v) : '-');
       return [n.id, Number(n.sort) || 0, n.online ? 1 : 0, n.metrics ? 1 : 0,
         n.name, n.public_remark, n.country, n.os, n.virt,
-        n.cpu_cores, n.cpu_name, n.mem_total, n.disk_total, m.cpu, m.mem_used, m.disk_used,
-        m.net_rx, m.net_tx, m.uptime, n.day_rx, n.day_tx, r && r.avg != null ? Math.round(r.avg) : '',
+        n.cpu_cores, n.cpu_name, n.mem_total, n.disk_total,
+        Math.round(Number(m.cpu) || 0), pct(m.mem_used, memTotal), pct(m.disk_used, diskTotal),
+        rate(m.net_rx), rate(m.net_tx),
+        m.uptime != null && isFinite(m.uptime) ? fmtUptime(m.uptime) : '-',
+        n.day_rx, n.day_tx, r && r.avg != null ? Math.round(r.avg) : '',
         cells.map((c) => `${c.label}:${c.lat}:${c.lossTxt}`).join('/'),
-        Math.floor((seenAgo(n) ?? -1) / 60)].join(',');   // 离线时长/静态字段变了也要重画
+        // ★ 离线时长：<60s 用秒级（卡片显示 fmtAgoSec 的「30秒前」），≥60s 按分钟。
+        //   以前一律 Math.floor(/60)，于是「离线 30秒前」会冻结最多 60 秒不更新，
+        //   和旁边每 6 秒刷新的在线数字口径不一致。
+        (() => { const s = seenAgo(n); if (s == null) return -1; return s < 60 ? Math.floor(s) : Math.floor(s / 60) * 60; })(),
+      ].join(',');   // 离线时长/静态字段变了也要重画
     }).join('|');
     if (!force && sig === this._plistSig) return;
     this._plistSig = sig;
@@ -175,11 +201,21 @@ export class Hud {
     const avg = avgs.length ? Math.round(avgs.reduce((s, x) => s + x, 0) / avgs.length) : null;
     this.plistSum.textContent = `共 ${total} 台 · 在线 ${on}` + (avg == null ? '' : ` · 平均延迟 ${avg} ms`);
 
-    const keep = this.plistBody.scrollTop;      // 重建 innerHTML 会把滚动位置打回顶部，先存着
+    // ★ 重建 innerHTML 会把滚动位置和**键盘焦点**一起弄丢（焦点落到 <body>，读屏虚拟光标也丢）。
+    //   id 先按 data-id 记下来，重建后按 id 归还（与 backToList 的找回方式一致）。
+    const active = document.activeElement;
+    const focusId = active && this.plistBody.contains(active)
+      ? active.closest('.pcard')?.dataset.id
+      : null;
+    const keep = this.plistBody.scrollTop;
     this.plistBody.innerHTML = nodes.length
       ? nodes.map((n) => probeCard(n, netOf(n), cellsOf(n))).join('')
       : '<p class="note">监控后端里还没有节点</p>';
     this.plistBody.scrollTop = keep;
+    if (focusId != null) {
+      const card = this.plistBody.querySelector(`.pcard[data-id="${Number(focusId)}"]`);
+      if (card) { try { card.focus({ preventScroll: true }); } catch { /* 老浏览器 */ } }
+    }
   }
 
   // 只在文本真的变了才写：tick 每秒调一次 updateCounters，同一条错误会被 aria-live 反复播报
@@ -237,9 +273,12 @@ export class Hud {
     }
     this._boardSig = sig;
     this._boardAt = now;
-    this.boardTitle.textContent = this.collapsed ? '🐔 啄倒榜' : '🐔 啄倒榜（点击收起）';
+    // ⚠ 写按钮的 textContent（不是 h3 的）：h3 里现在有个 <button>，直接改 h3.textContent 会把它抹掉
+    const label = this.collapsed ? '🐔 啄倒榜' : '🐔 啄倒榜（点击收起）';
+    if (this.boardToggle) this.boardToggle.textContent = label;
+    else this.boardTitle.textContent = label;
     this.boardEl.classList.toggle('collapsed', this.collapsed);
-    this.boardEl.setAttribute('aria-expanded', String(!this.collapsed));
+    (this.boardToggle || this.boardEl).setAttribute('aria-expanded', String(!this.collapsed));
     if (this.collapsed) return;
     // 名字来自节点名/访客名，必须转义（innerHTML 拼串）
     this.boardRows.innerHTML = top.map((r) =>

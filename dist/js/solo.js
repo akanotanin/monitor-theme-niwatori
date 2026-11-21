@@ -12,11 +12,11 @@
 // 数值对齐 server/farm_server.py（PROBE_HP=100、玩家啄 12 / 扇翅 8、暴躁鸡啄 9 / 冷却 2.2s、
 // 大白鹅 60 血 / 啄 6 / 领地 2.5m、看门狗 9 伤害 / 冷却 1.1s 等）。
 
-import { Npc } from './npc.js?v=1.0.19';
-import { Goose } from './goose.js?v=1.0.19';
-import { Dog, DOG } from './dog.js?v=1.0.19';
-import { CONF } from './data.js?v=1.0.19';
-import { resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.19';
+import { Npc } from './npc.js?v=1.0.20';
+import { Goose, GOOSE } from './goose.js?v=1.0.20';
+import { Dog, DOG } from './dog.js?v=1.0.20';
+import { CONF } from './data.js?v=1.0.20';
+import { resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.20';
 
 const THEME = (typeof window !== 'undefined' && window.CP_THEME) || {};
 
@@ -46,14 +46,17 @@ const BULLY_DUR = 5.0;
 const BULLY_CD = 8.0;
 const BULLY_RANGE = 22.0;
 
-const GOOSE_HP = 60;
+// ★ 鹅的战斗数值不在这里复制一份：goose.js 导出的 GOOSE 是唯一真源
+//   （复制一份的后果：改 GOOSE.maxHp 后「五口啄击放倒它」的说明文字和实际判定就对不上了）。
+//   狗那边同理，DOG 常量已从 dog.js 导入。
+const GOOSE_HP = GOOSE.maxHp;
 const GOOSE_WALK = 1.05;
 const GOOSE_CHASE = 2.9;
-const GOOSE_CHASE_R = 2.5;
-const GOOSE_LEASH = 6.5;
-const GOOSE_PECK_R = 1.15;
-const GOOSE_DMG = 6;
-const GOOSE_CD = 1.2;
+const GOOSE_CHASE_R = GOOSE.chaseR;
+const GOOSE_LEASH = GOOSE.leash;
+const GOOSE_PECK_R = GOOSE.peckR;
+const GOOSE_DMG = GOOSE.dmg;
+const GOOSE_CD = GOOSE.cd;
 const GOOSE_R = 0.35;
 const GOOSE_KNOCK = 1.2;
 

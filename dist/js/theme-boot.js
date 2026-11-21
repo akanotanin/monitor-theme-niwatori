@@ -22,7 +22,7 @@ let load = null;
 if (typeof document !== 'undefined') {
   try {
     // ★ 用 await import 会等模块图，但它只有一个文件、没有依赖，实际只多一次往返
-    const mod = await import('./loading.js?v=1.0.19');
+    const mod = await import('./loading.js?v=1.0.20');
     load = mod.mount();
   } catch (err) {
     console.warn('[niwatori] 载入动画未启动', err);
@@ -42,6 +42,10 @@ const finish = (cb) => { try { load ? load.done(cb) : cb?.(); } catch { cb?.(); 
 const dropCurtain = () => {
   const b = document.getElementById('boot');
   if (!b) return;
+  // ★ 和 main.js 的正常揭幕路径一样要释放载入动画：resize/pointerdown 监听
+  //   与闭包里的 Path2D 池（约 1.7 MB）否则会一直挂在 window 上。
+  //   以前只在正常路径 dispose，锁屏/main.js 失败这两条异常路径照样泄漏。
+  try { window.__NIWATORI_LOAD__?.dispose?.(); } catch { /* 没挂上 */ }
   b.classList.add('done');
   setTimeout(() => b.remove(), 420);
 };
@@ -73,7 +77,13 @@ function asBool(v, d) {
   return d;
 }
 
+/** 把配置里的数字夹到区间；缺项 / 空值一律回落默认值。 */
 function asNum(v, d, min, max) {
+  // ★ 先挡空值再转数：Number(null) === 0、Number('') === 0，都不是 NaN。
+  //   后台把数字框清空后存的是 null / ''，直接转会把「没填」夹成 min ——
+  //   hotCpu=1 会让 CPU 2% 的机器全判成暴躁鸡，geese=0 会让鹅整批消失。
+  //   口径与 data.js:181 的 sanitizeMetrics 一致（那里也是先挡 null/''/布尔）。
+  if (v == null || v === '' || typeof v === 'boolean') return d;
   const n = typeof v === 'number' ? v : Number(v);
   if (!Number.isFinite(n)) return d;
   return Math.min(max, Math.max(min, Math.round(n)));
@@ -209,7 +219,7 @@ async function start() {
 
   // 主题文件在升级瞬间可能还没全部就位（或 CDN 缓存了短暂 404）：
   // 动态 import 重试 3 次；theme-shell 失败不锁农场，避免「农场没启动」整页报错。
-  const V = '1.0.19';
+  const V = '1.0.20';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   async function load(path, tries = 3) {
     let last;

@@ -37,29 +37,63 @@ if (!(await stat(join(ROOT, 'THIRD-PARTY-NOTICES.md'))).isFile()) {
 }
 
 // ---------- 收集文件（tar 内路径用 /）----------
+// ★ 只打「仓库里该有的文件」：以前 walk(DIST) 是全量收录，dist/debug.log、main.js.bak、.tmpnote
+//   这些本机垃圾会跟着发布包发出去（.gitignore 忽略了也没用 —— 打包器不看 gitignore）。
+//   判据：git 已跟踪 → 收；否则按「垃圾文件名」排除（新增文件还没 git add 时也要能打进去，
+//   不能只认跟踪集 —— 否则新 vendor 的引擎/模型会被静默漏出发布包）。
+let trackedSet = null;
+try {
+  const { execFileSync } = await import('node:child_process');
+  const out = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8', maxBuffer: 32 << 20 });
+  trackedSet = new Set(out.split('\0').filter(Boolean).map((p) => p.split(/[\\/]/).join('/')));
+} catch { /* 没有 git（源码 zip / 沙箱）：只按文件名规则 */ }
+const JUNK = /(^|\/)(\.DS_Store|Thumbs\.db)$|\.(log|bak|tmp|orig|rej|swp)$|~$|(^|\/)\._/i;
+const isWanted = (rel) => {
+  if (JUNK.test(rel)) return false;                                   // 本机垃圾：永远不收
+  if (trackedSet) return trackedSet.has(rel) || !rel.split('/').some((seg) => seg.startsWith('.') && seg !== '.well-known');
+  return !rel.split('/').some((seg) => seg.startsWith('.') && seg !== '.well-known');
+};
+
 const files = [];
+const dropped = [];
 async function walk(dir, rel = '') {
   for (const e of await readdir(dir, { withFileTypes: true })) {
     const full = join(dir, e.name);
     const r = rel ? `${rel}/${e.name}` : e.name;
     if (e.isDirectory()) await walk(full, r);
-    else if (e.isFile()) files.push({ full, name: r });
+    else if (e.isFile()) {
+      if (isWanted(`dist/${r}`)) files.push({ full, name: `dist/${r}` });
+      else dropped.push(`dist/${r}`);
+    }
   }
 }
 for (const name of ['theme.json', 'LICENSE', 'THIRD-PARTY-NOTICES.md', manifest.preview || 'preview.png']) {
   const full = join(ROOT, name);
   try { if ((await stat(full)).isFile()) files.push({ full, name }); } catch { /* preview 可以没有 */ }
 }
-await walk(DIST, 'dist');
+await walk(DIST);
+if (dropped.length) console.log(`· 跳过 ${dropped.length} 个未跟踪/垃圾文件（不进发布包）：${dropped.slice(0, 5).join('、')}${dropped.length > 5 ? ' …' : ''}`);
 // 字节序排序（localeCompare 依赖 locale/ICU：同一份源码在不同机器上会排出不同的包，哈希就不可复验）
 files.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 // tar 头里的 mtime 固定（默认 0，可用 SOURCE_DATE_EPOCH 覆盖）：否则每个文件的修改时间都进哈希，
 // 内容完全相同的包每次打出来都不一样，发布包的 sha256 无法用源码复验（审查 M11）。
 const EPOCH = Number(process.env.SOURCE_DATE_EPOCH || 0);
+// ★ 必须校验：octal() 用 padStart().slice(-width)，负数和 NaN 会原样落进 tar 头的 mtime 字段
+//   （"000000000-5" / "00000000NaN"）—— 产出的是**解不开的包**，脚本却照样 exit 0 报成功。
+if (!Number.isFinite(EPOCH) || EPOCH < 0) {
+  throw new Error(`SOURCE_DATE_EPOCH 必须是 0 或正整数（当前：${process.env.SOURCE_DATE_EPOCH}）`);
+}
 
 // ---------- 最小 tar 写入器（ustar）----------
 const BLOCK = 512;
-const octal = (n, width) => n.toString(8).padStart(width, '0').slice(-width);
+const octal = (n, width) => {
+  // 负数 / NaN / 超出字段位宽的值一律拒绝：静默截断会写出解不开的包（mtime、size 两处都踩过）
+  const max = Math.pow(8, width - 1) - 1;
+  if (!Number.isFinite(n) || n < 0 || n > max) {
+    throw new Error(`tar 头字段溢出：值 ${n} 不在 0..${max}（width=${width}）`);
+  }
+  return Math.floor(n).toString(8).padStart(width, '0').slice(-width);
+};
 function header(name, size, mtime, mode = 0o644) {
   if (Buffer.byteLength(name) > 100) throw new Error(`tar 路径超过 100 字节：${name}`);
   const h = Buffer.alloc(BLOCK, 0);

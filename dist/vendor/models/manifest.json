@@ -32,5 +32,36 @@
     "grain-silo-58ca67",
     "porch-log-cabin-d2f3ef",
     "farm-dog-723730"
-  ]
+  ],
+  "sha256": {
+    "compact-tractor-35b84b": "b2950adba3eef52d32b587c538b40ed4ac6254031203c0987a7124e49fcc9f8b",
+    "roofed-well-43a2fc": "bd5668ff94306797e80b12dbeee3f3325e6853757fb452b2ff7a2eb8fa228017",
+    "wheelbarrow-0f8406": "7e9178ffeb169c7726198125523dfa1dbe5ac001820802d824ad88bc06e0a6eb",
+    "scarecrow-334079": "8d4d05b812bb449b5faf2e3fa2ad58a5caa7dd9ab32e0e326f878ea0691aa70f",
+    "wooden-crate-e46521": "a9d55c352f635a7c251c123c98c301f2681438af20cb2b8635cc9a8f85b995ac",
+    "plank-trough-baf3d5": "2733228ed5179ad3d5425c0a043a28aaf14f2082a6e94811bca65e0c34e2d013",
+    "hay-bale-079e8c": "2a9240fdba99965cd7ff4d14abafd1a19b4209c8d8f7ff89026afa695b90cbcb",
+    "beehive-2e70bf": "04f3a59320f52c2e74f856269e4031cc3a1425f502844f5a6ca9fd47bb39a2d3",
+    "compost-heap-dfec38": "b8be1f09cc680f95139d7b4033456945e08d31b5a8ea79ff897adebe2ae976f0",
+    "split-log-bench-289780": "62c8f1dba0ea07adf5bc4f659d1edb83ebd995df19be9b38cdb950e9a3d943da",
+    "heavy-timber-picnic-table-1ac060": "0e05deed284d042d32801ec168cfa3c8de3dbed93ba800062ec8bba6ef265e1f",
+    "chicken-coop-371f97": "1fca053269a0dee88f4881baa724de8aa474edac8edda87bf053416ef6684d19",
+    "open-woodshed-050a0a": "616dce6cf85db3878dbccf9100767289783621a94780ec230cfedefa5898ea1b",
+    "fire-lookout-tower-75a129": "84c7cdb1ecf775e9c881ccc97fb123e74a35d9809fb357eadeaeecb7fdc7021e",
+    "firewood-stack-8a2899": "ee049681acf0bf94bf015f21d16aa4d12855884f902dd3665d5c58b4e4e83aa4",
+    "burro-with-marigold-panniers-1f04ab": "12acfbc107a4d52c09422d5eb706c303229b2992e6c3e5a8ce640a43c123a92c",
+    "stream-water-wheel-ea2d68": "cd32861a961f40f64f51895ba035ac079bbe0b87aab60bb12f1d51d20387db14",
+    "oak-tree-50ee7c": "5e432f955eae387a5e7a10fa1168de9136318d3e588d34f544af2f6a1cc7a340",
+    "broadleaf-oak-997c22": "f1043abb6e1a95de79fc447630283d799e63e17e0434827cfdc2de638560f4bc",
+    "orchard-apple-tree-b21f85": "eb5adb9d32b995afc6bd77f671f9f5a5bace0b39a2e67a80d07e5ba652c4fbc8",
+    "hand-water-pump-448037": "061fa73754608cdcfd5181f9d9e4a9ad95d402b44ef6159de8a37a9c4b85e7f4",
+    "cauldron-on-coals-ddbab6": "438f77958e15d7deb51b89af42e71839b1f5bba828b36940e4f6943669ee4b61",
+    "reed-bed-bbbefb": "0cd409039960684c6992a8ce9cb4f866a67bc3b48f93b021bf110cea5c8486a5",
+    "lily-pads-b0c5d0": "e48430e88223251a315be6520ed9f28cf004b1a67d4dd90ef4a421d68413eb47",
+    "lake-pebbles-6c0359": "0e4a45b102b18c7a3fbcafab308c811bf5e42cf0d06a8e1cbf6ff280584593f1",
+    "wooden-rowboat-916981": "a727d4a1428dd1a2c56ece9508c3d23b58be99fbfce186abefdbf589ce13eaf0",
+    "grain-silo-58ca67": "b021029333b548897e89a4e50d2f642606e726b24e3606e7fb3c0c27db1838ac",
+    "porch-log-cabin-d2f3ef": "47a3631d081b94384cc05a01d6322aaa69c4161e608fde8ee83fab2d5968f659",
+    "farm-dog-723730": "55331b650f0e6916158423e2e3e253319dc3bbd65bd6b7870bcfd07b48b57abc"
+  }
 }

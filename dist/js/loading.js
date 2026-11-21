@@ -1205,9 +1205,13 @@ export function mount() {
   /* ---------- 尺寸跟随 ---------- */
   let resizeTimer = 0;
   function onResize() {
+    // 幕布已经摘掉（main.js 的 doReveal 之后）：别再往已摘除的 canvas 上画 ——
+    // 这里只是 rAF 循环不跑了，resize 监听还在的话每次转屏/拖窗口都会白跑一轮 fit+render。
+    if (!canvas.isConnected) return;
     if (resizeTimer) clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       resizeTimer = 0;
+      if (!canvas.isConnected) return;
       fit();
       render(performance.now(), shown);
     }, 120);
