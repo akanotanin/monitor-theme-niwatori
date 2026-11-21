@@ -1,18 +1,18 @@
 // 总装：渲染器、第三人称操控、输入（鼠标/键盘/触屏）、NPC 数据绑定、主循环
 import * as THREE from 'three';
-import { Farm, CONF } from './data.js?v=1.0.21';
-import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.21';
-import { Chicken } from './chicken.js?v=1.0.21';
-import { Npc } from './npc.js?v=1.0.21';
-import { Goose, GOOSE } from './goose.js?v=1.0.21';
-import { Dog, DOG } from './dog.js?v=1.0.21';
-import { Hud } from './hud.js?v=1.0.21';
-import { Net } from './net.js?v=1.0.21';
-import { SoloFarm } from './solo.js?v=1.0.21';
-import { Feathers, Dust } from './feathers.js?v=1.0.21';
-import { Sfx } from './sfx.js?v=1.0.21';
-import { decorate } from './models.js?v=1.0.21';
-import * as CFG from './config.js?v=1.0.21';
+import { Farm, CONF } from './data.js?v=1.0.22';
+import { buildScene, resolveCollision, BOUNDS, groundHeight } from './world.js?v=1.0.22';
+import { Chicken } from './chicken.js?v=1.0.22';
+import { Npc } from './npc.js?v=1.0.22';
+import { Goose, GOOSE } from './goose.js?v=1.0.22';
+import { Dog, DOG } from './dog.js?v=1.0.22';
+import { Hud } from './hud.js?v=1.0.22';
+import { Net } from './net.js?v=1.0.22';
+import { SoloFarm } from './solo.js?v=1.0.22';
+import { Feathers, Dust } from './feathers.js?v=1.0.22';
+import { Sfx } from './sfx.js?v=1.0.22';
+import { decorate } from './models.js?v=1.0.22';
+import * as CFG from './config.js?v=1.0.22';
 
 const $ = (id) => document.getElementById(id);
 // 触屏笔记本的 Chrome/Edge 也常暴露 ontouchstart（但主指针仍是鼠标）：
@@ -1233,6 +1233,8 @@ addEventListener('resize', () => {
 
 // ---------- 操作说明（底部中置一条，桌面/手机文案不同）----------
 // 不拦遮罩：打开就进场地（数据在后台读，读不到会在底部提示）。
+// 注意：HUD 的「什么时候可见」由 CSS 的 body.ready 控制（见 style.css 的 #hud），
+// 不在这里 —— 这里只是清掉可能残留的 .hidden，别让它变成第二个开关。
 $('hud').classList.remove('hidden');
 const HINT_DESKTOP = "<b>Esc</b> 释放鼠标 <i>·</i> <b>WASD</b> 移动 <i>·</i> <b>Shift</b> 疾跑 <i>·</i> <b>空格</b> 跳 <i>·</i> <b>左键</b> 啄 <i>·</i> <b>右键</b> 扇翅 <i>·</i> <b>滚轮</b> 缩放 <i>·</i> <b>L</b> 光照 <i>·</i> <b>M</b> 静音 <i>·</i> <b>Tab</b> 探针";
 const HINT_TOUCH = "<b>左摇杆</b> 走路 <i>·</i> <b>拖动</b> 转视角 <i>·</i> <b>轻点鸡</b> 看数据 <i>·</i> <b>双指</b> 缩放 <i>·</i> <b>🖥</b> 探针";
@@ -1262,6 +1264,10 @@ const showWorld = () => {
       clearTimeout(fallback);
       canvas.style.opacity = '1';
       bootEl.classList.add('done');
+      // ★ HUD（统计卡 / 啄倒榜 / 血量卡 / 底部提示）现在默认不可见，必须在这一刻放开，
+      //   否则幕布淡出后访客会看到一片空农场，没有任何读数与入口。
+      //   放在这里而不是更早：载入期间那块像素动画要独占画面。
+      document.body.classList.add('ready');
       // ★ 揭幕后显式释放载入动画：resize 监听、pointerdown 监听、闭包里的 4 个 Path2D
       //   + 池子（约 1.7 MB）都会一直挂在 window 上 —— 幕布元素被 remove 了也照样活着。
       //   以前只 remove 元素、不调 dispose，每次转屏都会往已摘除的 canvas 重绘一轮。
@@ -1274,6 +1280,8 @@ const showWorld = () => {
     else doReveal();
   } else {
     canvas.style.opacity = '1';
+    // 没有 #boot（主题文件被裁剪/老缓存）时也要放开 HUD，否则只剩一个空农场
+    document.body.classList.add('ready');
   }
 };
 // 精细模型始终开启：模型随包分发，没有后台开关。个别模型拉不到时 decorate 会把对应自建版放出来。

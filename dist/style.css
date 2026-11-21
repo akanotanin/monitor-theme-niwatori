@@ -29,7 +29,17 @@ body.ld-ready #boot .ld-tip{opacity:1}
 /* （原来的整屏操作说明遮罩已按用户要求移除，操作提示改为底部中置一条 #hint） */
 
 /* ---------- HUD ---------- */
-#hud{position:fixed;inset:0;pointer-events:none;z-index:20}
+/* ⚠ HUD 要等首屏揭幕后才淡入：载入幕布（#boot, z-index 15）盖不住它（#hud 是 20），
+   以前统计卡/啄倒榜/血量卡/底部提示从第一帧就浮在像素载入动画上面（用户报过）。
+   用 body.ready 开关 —— 由 main.js 的 doReveal 与 theme-boot 的 dropCurtain 两处同时置上，
+   保证正常揭幕、锁屏、main.js 加载失败三条路径都不会把 HUD 永久藏起来。
+   visibility 配合 opacity：淡出期间就不能被点到，也进不了 Tab 序。 */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:20;
+  opacity:0;visibility:hidden;
+  transition:opacity .34s ease, visibility 0s linear .34s}
+body.ready #hud{opacity:1;visibility:visible;
+  transition:opacity .34s ease .1s, visibility 0s}
+body.is-locked #hud{opacity:0;visibility:hidden;transition:none}   /* 锁屏时别让 HUD 闪一下 */
 #hud button{pointer-events:auto}
 /* HUD 的卡片/提示要自己接住事件：否则触摸/点击会穿透到 canvas，变成“点选场上的鸡/锁定视角” */
 #topbar,#me,#hint,#feed,#banner{pointer-events:auto}

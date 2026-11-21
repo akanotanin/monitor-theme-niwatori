@@ -65,6 +65,10 @@ async function main() {
   const chrome = spawn(CHROME, [
     '--headless=new', '--no-sandbox',
     // ★ 不要加 --use-angle=swiftshader：本机实测它会让 Page.captureScreenshot 随机卡死
+    // ★ --no-proxy-server：本机（以及任何开了系统代理的 CI）若不显式关掉，
+    //   headless 访问 127.0.0.1 也会被代理接管 → 页面直接变成 chrome-error://chromewebdata/，
+    //   所有断言一起变成 null（看起来像「载入动画坏了」，其实是根本没加载）。
+    '--no-proxy-server',
     '--window-size=1440,900', '--hide-scrollbars', '--mute-audio',
     '--no-first-run', '--no-default-browser-check', '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding', `--remote-debugging-port=${CDP_PORT}`,
@@ -128,19 +132,41 @@ async function main() {
   check('不溢出视口', !!geo && geo.right <= geo.vw && geo.left >= 0, geo && { left: geo.left, right: geo.right, vw: geo.vw });
 
   /* ---------- 2/3. 进度只往上走 + 模型计数接上了 ---------- */
-  const trace = [];
-  for (let i = 0; i < 200; i++) {
-    const s = await ev(`(() => { const L = window.__NIWATORI_LOAD__; const st = L ? L.state() : null;
-      return st ? { p: st.shown, t: st.target, ph: st.phase, m: st.models } : null; })()`).catch(() => null);
-    if (s) {
-      trace.push(s);
-      if (s.ph !== 'load') break;
-    }
-    await sleep(60);
-  }
+  // ★ 不要在外部按 30/60ms 轮询：本地全命中缓存时载入 1 秒内就结束，
+  //   轮询只能采到 1–3 个点，「单调性」这条断言等于没测（样本太少）。
+  //   改成页面内 rAF 采样器 —— 每帧记一次，样本数与载入速度无关。
+  //   先装采样器再导航（addScriptToEvaluateOnNewDocument），保证从第一帧就在记。
+  await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `(() => {
+      window.__trace = [];
+      const sample = () => {
+        try {
+          const L = window.__NIWATORI_LOAD__;
+          const st = L && L.state ? L.state() : null;
+          if (st) window.__trace.push({ p: st.shown, t: st.target, ph: st.phase, m: st.models });
+          // 收尾阶段（celebrate/done）多记 40 帧就够，之后停
+          if (window.__trace.length > 4000) return;
+        } catch { /* 还没挂上 */ }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    })();`,
+  });
+  await cdp.send('Page.navigate', { url: `${BASE}/?probe=1&t=${Date.now()}` });
+  // 等载入动画彻底结束（#boot 移除）再一次性取回全部样本
+  await ev(`new Promise((r) => {
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      const b = document.getElementById('boot');
+      if ((b && b.classList.contains('done')) || Date.now() - t0 > 25000) { clearInterval(iv); r(1); }
+    }, 80);
+  })`);
+  const trace = (await ev('(window.__trace || []).filter(Boolean)')) || [];
+
   let mono = true;
   for (let i = 1; i < trace.length; i++) if (trace[i].p < trace[i - 1].p - 0.002) mono = false;
-  check('进度只往上走（不假装回退）', mono && trace.length > 3, { samples: trace.length });
+  // rAF 采样器每帧一次：本地也能采到几十个点。仍留 3 的下限防止采样器没装上时「真空通过」。
+  check('进度只往上走（不假装回退）', mono && trace.length >= 3, { samples: trace.length });
   const counted = trace.some((s) => s.m && s.m.total > 0 && s.m.ok > 0);
   check('模型计数推进了进度（count 接上了）', counted, trace.find((s) => s.m?.total > 0)?.m || null);
   check('真实进度没有越过上限就直接跳满', trace.filter((s) => s.ph === 'load').every((s) => s.t <= 1.0), null);
@@ -193,6 +219,10 @@ async function main() {
   check('收尾有显著变化（点灯 + 彩旗 + 暖光）', lastDiff >= 1500, { changedPx: lastDiff });
 
   /* ---------- 6. 揭幕后幕布移除、画布淡入 ---------- */
+  // ★ 先清空累积错误：第 4/5 段是逐帧截图（PREVIEW），导航打断上一页的加载
+  //   会产生「Failed to fetch dynamically imported module」这类噪音，
+  //   它属于测试自己的换页动作，不是主题的问题 —— 不清掉会一路带到第 7 段之后。
+  errors.length = 0;
   await cdp.send('Page.navigate', { url: `${BASE}/?t=${Date.now()}` });
   let revealed = null;
   for (let i = 0; i < 240; i++) {

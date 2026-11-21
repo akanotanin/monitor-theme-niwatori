@@ -22,7 +22,7 @@ let load = null;
 if (typeof document !== 'undefined') {
   try {
     // ★ 用 await import 会等模块图，但它只有一个文件、没有依赖，实际只多一次往返
-    const mod = await import('./loading.js?v=1.0.21');
+    const mod = await import('./loading.js?v=1.0.22');
     load = mod.mount();
   } catch (err) {
     console.warn('[niwatori] 载入动画未启动', err);
@@ -48,6 +48,9 @@ const dropCurtain = () => {
   try { window.__NIWATORI_LOAD__?.dispose?.(); } catch { /* 没挂上 */ }
   b.classList.add('done');
   setTimeout(() => b.remove(), 420);
+  // ⚠ 不在这里放开 HUD（body.ready）：本函数的两条调用路径都是「锁屏」
+  //   （站点关闭公开页 / main.js 加载失败后进 lockScreen），那时 HUD 本来就不该出现。
+  //   正常的放开展示在 main.js 的 doReveal 与 showWorld 的 else 分支里。
 };
 
 step(0.08);
@@ -223,7 +226,7 @@ async function start() {
 
   // 主题文件在升级瞬间可能还没全部就位（或 CDN 缓存了短暂 404）：
   // 动态 import 重试 3 次；theme-shell 失败不锁农场，避免「农场没启动」整页报错。
-  const V = '1.0.21';
+  const V = '1.0.22';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   async function load(path, tries = 3) {
     let last;
